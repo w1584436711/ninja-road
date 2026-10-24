@@ -26,7 +26,7 @@ export class TouchControls {
     this.layer.addEventListener('pointermove', e => this.onMove(e));
     for (const type of ['pointerup', 'pointercancel']) this.layer.addEventListener(type, e => this.onUp(e));
 
-    document.querySelectorAll('#tbtns [data-key]').forEach(btn => {
+    document.querySelectorAll('#touch [data-key]').forEach(btn => {
       const code = btn.dataset.key;
       btn.addEventListener('pointerdown', e => {
         e.stopPropagation();
@@ -116,6 +116,9 @@ export class TouchControls {
     this.looks.clear();
     this.base.classList.remove('show');
     Object.assign(this.input.analog, { active: false, x: 0, y: 0 });
-    for (const code of ['Space', 'KeyE', 'KeyC']) this.input.release(code);
+    document.querySelectorAll('#touch [data-key]').forEach(b => {
+      b.classList.remove('pressed');
+      this.input.release(b.dataset.key);
+    });
   }
 }

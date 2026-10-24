@@ -14,7 +14,7 @@ export class Input {
     addEventListener('keydown', e => {
       if (!e.repeat) this.justPressed.add(e.code);
       this.keys.add(e.code);
-      if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+      if (e.code === 'Space' || e.code === 'Tab' || e.code.startsWith('Arrow')) e.preventDefault();
     });
     addEventListener('keyup', e => this.keys.delete(e.code));
     addEventListener('blur', () => this.keys.clear());
@@ -24,7 +24,11 @@ export class Input {
         this.mouseDY += e.movementY;
       }
     });
-    el.addEventListener('mousedown', () => { this.dragging = true; });
+    el.addEventListener('mousedown', e => {
+      // 鎖定滑鼠時，左鍵＝攻擊；沒鎖定時按住左鍵是拖曳視角
+      if (document.pointerLockElement === el && e.button === 0) this.justPressed.add('Mouse0');
+      else this.dragging = true;
+    });
     addEventListener('mouseup', () => { this.dragging = false; });
     el.addEventListener('wheel', e => {
       this.wheel += e.deltaY;

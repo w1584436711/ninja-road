@@ -9,7 +9,9 @@ html, body {
 #game { display: block; width: 100%; height: 100%; }
 .hidden { display: none !important; }
 
-#hud { position: fixed; inset: 0; pointer-events: none; }
+/* HUD 疊在觸控層（z 5）之上；本身不攔截觸控，只有時鐘等按鈕可點 */
+#hud { position: fixed; inset: 0; pointer-events: none; z-index: 6; }
+#overlay { z-index: 10; }
 
 /* 角色狀態 */
 #status {
@@ -52,7 +54,6 @@ html, body {
 }
 #areaLabel { margin-top: 4px; font-size: 14px; font-weight: 700; color: #ffd27a; }
 #coords { font-size: 11px; color: #dde; }
-#mapbox { z-index: 6; } /* 在觸控層之上，時鐘才點得到 */
 #clock {
   pointer-events: auto; cursor: pointer;
   margin: 3px auto 0; padding: 2px 10px;
@@ -98,6 +99,79 @@ body.touch #clock { font-size: 10px; }
 .slot .cost { font-size: 9px; color: #8fd3ff; }
 .slot.off { opacity: .4; }
 .slot.active { border-color: #4fc3ff; box-shadow: 0 0 14px #4fc3ff; }
+
+/* ---------- 戰鬥介面 ---------- */
+#floaters { position: absolute; inset: 0; overflow: hidden; }
+.floater {
+  position: absolute; left: 0; top: 0; white-space: nowrap; will-change: transform;
+  font-size: 22px; font-weight: 900; color: #fff;
+  -webkit-text-stroke: 1px rgba(0, 0, 0, .6); text-shadow: 0 2px 3px rgba(0, 0, 0, .8);
+}
+.floater.crit { font-size: 30px; color: #ffd23a; }
+.floater.hurt { color: #ff5a4e; }
+.floater.exp { font-size: 18px; color: #9fe39a; }
+.floater.info { font-size: 16px; color: #8fd3ff; }
+.floater.alert { font-size: 34px; color: #ff3a2a; }
+
+#targetFrame {
+  position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+  width: min(320px, 46vw); text-align: center; text-shadow: 0 1px 3px #000;
+}
+#targetName { font-size: 14px; font-weight: 700; color: #ff9a8a; margin-bottom: 3px; }
+.tg .fill { background: linear-gradient(90deg, #b3261e, #ff6a4a); }
+
+#sealBar {
+  position: absolute; bottom: 104px; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  font-size: 14px; text-shadow: 0 1px 3px #000;
+}
+#sealBar .seq { display: flex; gap: 6px; }
+#sealBar .seq span {
+  width: 40px; height: 40px; border-radius: 8px; display: grid; place-items: center;
+  font-size: 22px; font-weight: 900; color: #fff;
+  background: rgba(90, 50, 140, .85); border: 2px solid #c9a6ff;
+  animation: sealPop .15s ease-out;
+}
+#sealBar .hint { color: #e9dcff; font-size: 12px; }
+@keyframes sealPop { from { transform: scale(1.5); } to { transform: scale(1); } }
+
+#jutsuCall {
+  position: absolute; top: 34%; left: 50%; transform: translate(-50%, -50%);
+  font-size: 44px; font-weight: 900; letter-spacing: 10px; color: #fff; white-space: nowrap;
+  -webkit-text-stroke: 2px #8a3b0a; text-shadow: 0 0 18px rgba(255, 150, 40, .9);
+  opacity: 0; transition: opacity .3s;
+}
+#jutsuCall.show { opacity: 1; animation: callIn .35s ease-out; }
+@keyframes callIn { from { transform: translate(-50%, -50%) scale(1.6); letter-spacing: 30px; } }
+
+#hurtFlash {
+  position: absolute; inset: 0; opacity: 0; transition: opacity .35s;
+  background: radial-gradient(ellipse at center, transparent 45%, rgba(200, 20, 10, .55));
+}
+#hurtFlash.show { opacity: 1; transition: none; }
+
+#death {
+  position: absolute; inset: 0; display: none; place-items: center; align-content: center; gap: 8px;
+  background: rgba(10, 5, 5, .55); font-size: 36px; font-weight: 900; letter-spacing: 6px; color: #ff8a7a;
+  text-shadow: 0 2px 6px #000;
+}
+#death.show { display: grid; }
+#death small { font-size: 14px; letter-spacing: 2px; color: #dde; text-align: center; }
+
+#jutsuPanel {
+  position: absolute; right: 16px; bottom: 20px; min-width: 190px;
+  padding: 8px 12px; font-size: 12px; line-height: 1.7;
+  background: rgba(15, 20, 35, .65); border-radius: 8px; color: #dde;
+}
+.jp-title { font-weight: 700; color: #c9a6ff; }
+.jp-seals { color: #e9dcff; margin-bottom: 2px; }
+.jp-list .cost, .jutsu-ref .cost { color: #8fd3ff; }
+.jutsu-ref { margin-top: 14px; font-size: 13px; line-height: 1.8; color: #e9dcff; }
+.tip { margin-top: 10px; font-size: 12px; color: #ffd27a; }
+body.touch #jutsuPanel { display: none; }
+body.touch #sealBar { bottom: auto; top: 30%; }
+body.touch #targetFrame { top: 8px; width: 34vw; }
+body.touch #jutsuCall { font-size: 30px; letter-spacing: 6px; }
 
 #help {
   position: absolute; bottom: 20px; left: 16px;
@@ -148,6 +222,11 @@ body.touch #clock { font-size: 10px; }
   background: #2a3550; border: 1px solid #556; border-radius: 5px;
 }
 
+@media (max-width: 1100px) {
+  #help { display: none; }
+  .slot { width: 60px; height: 60px; font-size: 11px; }
+  #jutsuPanel { bottom: 96px; }
+}
 @media (max-width: 700px) {
   #help { display: none; }
   .bars { width: 150px; }
@@ -183,7 +262,7 @@ body.touch #skills { display: none; }
   position: absolute;
   right: calc(16px + env(safe-area-inset-right));
   bottom: calc(16px + env(safe-area-inset-bottom));
-  width: 210px; height: 190px;
+  width: 240px; height: 200px;
 }
 .tb {
   position: absolute; width: 64px; height: 64px; border-radius: 50%;
@@ -194,9 +273,25 @@ body.touch #skills { display: none; }
   touch-action: none; transition: transform .06s, opacity .15s;
 }
 .tb small { font-size: 9px; font-weight: 400; color: #8fd3ff; margin-top: 3px; }
-.tb.big { width: 88px; height: 88px; font-size: 30px; right: 0; bottom: 0; background: rgba(226, 103, 27, .75); }
-.tb[data-key="KeyE"] { right: 104px; bottom: 6px; }
-.tb[data-key="KeyC"] { right: 18px; bottom: 104px; }
+.tb.big { width: 86px; height: 86px; font-size: 30px; right: 0; bottom: 0; background: rgba(226, 103, 27, .75); }
+.tb.small { width: 46px; height: 46px; font-size: 17px; }
+#tbJump { right: 96px; bottom: 0; }
+#tbDash { right: 170px; bottom: 10px; width: 58px; height: 58px; }
+#tbKunai { right: 6px; bottom: 98px; width: 58px; height: 58px; }
+#tbSub { right: 80px; bottom: 78px; width: 58px; height: 58px; }
+#tbCharge { right: 150px; bottom: 84px; }
+#tbLock { right: 66px; bottom: 148px; }
+#tseals {
+  position: absolute; display: flex; gap: 8px;
+  right: calc(272px + env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom));
+}
+.ts {
+  width: 44px; height: 44px; border-radius: 10px;
+  font-family: inherit; font-size: 19px; font-weight: 900; color: #e9dcff;
+  background: rgba(60, 30, 90, .7); border: 2px solid rgba(190, 150, 255, .7);
+  touch-action: none;
+}
+.ts.pressed { transform: scale(.9); background: rgba(160, 110, 255, .7); }
 .tb.pressed { transform: scale(.9); background: rgba(79, 195, 255, .55); }
 .tb.off { opacity: .45; }
 .tb.active { border-color: #4fc3ff; box-shadow: 0 0 16px #4fc3ff; }

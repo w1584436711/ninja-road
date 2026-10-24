@@ -177,11 +177,66 @@ export function createCharacter(opts = {}) {
     return { shoulder: shoulderJ, elbow };
   });
 
+  // 武器握在 R 手（手肘群組裡，手臂往前時刀身朝前）
+  if (o.weapon === 'sword') {
+    const blade = mesh(new THREE.BoxGeometry(0.05, 0.85, 0.11), 0xd8dde4, 0, -0.78, 0);
+    const guard = mesh(new THREE.BoxGeometry(0.2, 0.04, 0.16), 0x3a2a1a, 0, -0.35, 0);
+    arms[0].elbow.add(blade, guard);
+  }
+
   return {
     root, upper, head, eyes, tails, blinkAt: 1 + Math.random() * 3,
     legR: legs[0].hip, kneeR: legs[0].knee, legL: legs[1].hip, kneeL: legs[1].knee,
     armR: arms[0].shoulder, elbowR: arms[0].elbow, armL: arms[1].shoulder, elbowL: arms[1].elbow,
   };
+}
+
+// 戰鬥動作：覆蓋基本姿勢。a = { type, t(0..1) }。回傳 [前傾, 上身扭轉]
+function applyAction(c, a, dt, lean) {
+  const k = 1 - Math.exp(-30 * dt);
+  const t = a.t ?? 0;
+  switch (a.type) {
+    case 'punch1': // 右直拳
+      ease(c.armR, -1.6, -0.1, k); ease(c.elbowR, -0.05, 0, k);
+      ease(c.armL, 0.4, 0.25, k); ease(c.elbowL, -1.3, 0, k);
+      return [0.3, 0.5];
+    case 'punch2': // 左鉤拳
+      ease(c.armL, -1.6, 0.1, k); ease(c.elbowL, -0.05, 0, k);
+      ease(c.armR, 0.4, -0.25, k); ease(c.elbowR, -1.3, 0, k);
+      return [0.3, -0.5];
+    case 'kick': // 迴旋踢
+      ease(c.legR, -1.75, 0, k); ease(c.kneeR, 0.1, 0, k);
+      ease(c.legL, 0.15, 0, k); ease(c.kneeL, 0.35, 0, k);
+      ease(c.armL, 0.3, 0.9, k); ease(c.armR, 0.3, -0.9, k);
+      return [-0.25, 0.3];
+    case 'throw':
+      if (t < 0.35) { ease(c.armR, 0.9, -0.2, k); ease(c.elbowR, -1.4, 0, k); return [0, 0.5]; }
+      ease(c.armR, -1.4, -0.05, k); ease(c.elbowR, -0.1, 0, k);
+      return [0.25, -0.35];
+    case 'seal': { // 結印：雙手在胸前快速變換
+      const j = Math.sin(t * Math.PI * 4) * 0.15;
+      ease(c.armL, -1.15 + j, -0.55, k); ease(c.armR, -1.15 - j, 0.55, k);
+      ease(c.elbowL, -1.1, 0, k); ease(c.elbowR, -1.1, 0, k);
+      return [0.1, 0];
+    }
+    case 'cast': // 忍術發動：雙手往前推
+      ease(c.armL, -1.5, 0.15, k); ease(c.armR, -1.5, -0.15, k);
+      ease(c.elbowL, 0, 0, k); ease(c.elbowR, 0, 0, k);
+      return [0.2, 0];
+    case 'slash': // 揮刀：舉高再劈下
+      if (t < 0.5) { ease(c.armR, -2.7, -0.1, k); ease(c.elbowR, -0.3, 0, k); return [-0.1, 0.3]; }
+      ease(c.armR, -0.7, -0.1, k); ease(c.elbowR, 0, 0, k);
+      return [0.35, -0.2];
+    case 'hurt':
+      ease(c.armL, 0.5, 0.6, k); ease(c.armR, 0.5, -0.6, k);
+      return [-0.4, 0];
+    case 'down':
+      ease(c.armL, 0.2, 0.9, k); ease(c.armR, 0.2, -0.9, k);
+      ease(c.legL, -0.1, 0.1, k); ease(c.legR, -0.1, -0.1, k);
+      return [0, 0];
+    default:
+      return [lean, 0];
+  }
 }
 
 function ease(obj, x, z, k) {
@@ -226,6 +281,9 @@ export function animateCharacter(c, s, dt) {
     ease(c.elbowL, -0.25 - a * 0.4, 0, k); ease(c.elbowR, -0.25 - a * 0.4, 0, k);
     lean = 0.08 * s.move;
   }
+  let twist = 0;
+  if (s.action) [lean, twist] = applyAction(c, s.action, dt, lean);
+  c.upper.rotation.y = lerp(c.upper.rotation.y, twist, 1 - Math.exp(-25 * dt));
   c.upper.rotation.x = lerp(c.upper.rotation.x, lean, k);
   // 跑步時身體上下起伏
   const bob = s.move > 0.3 && !s.airborne ? Math.abs(sw) * 0.03 : 0;

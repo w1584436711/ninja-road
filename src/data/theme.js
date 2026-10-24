@@ -29,7 +29,16 @@ export const THEME = {
 
   npcs: { villager: '風鈴村民', chunin: '風鈴中忍', student: '忍術學堂學生', shopOwner: '鈴屋老闆' },
 
-  skills: { jump: '二段跳', dash: '迅影步', dashShort: '迅', charge: '聚集查克拉', fire: '爆炎球' },
+  skills: {
+    jump: '二段跳', dash: '迅影步', dashShort: '迅', charge: '聚集查克拉',
+    attack: '體術', kunai: '苦無', sub: '替身術', lock: '鎖定',
+  },
+
+  // 忍術與結印（印的順序在 combat/jutsu.js）
+  jutsu: { fireball: '爆炎球', clone: '分身術', wind: '裂風刃' },
+  seals: ['寅', '巳', '未', '辰'],
+
+  enemies: { wolf: '野狼', bandit: '山賊', rogue: '流浪忍者', dummy: '訓練木樁' },
 };
 
 function merge(target, src) {

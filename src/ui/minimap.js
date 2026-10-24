@@ -40,7 +40,7 @@ export class Minimap {
     g.fill();
   }
 
-  draw(player) {
+  draw(player, combat) {
     const { ctx, canvas } = this;
     const W = canvas.width, H = canvas.height;
     const s = RES / WORLD_SIZE;
@@ -48,6 +48,19 @@ export class Minimap {
     ctx.fillStyle = '#0d1320';
     ctx.fillRect(0, 0, W, H);
     ctx.drawImage(this.base, (player.pos.x + HALF) * s - src / 2, (player.pos.z + HALF) * s - src / 2, src, src, 0, 0, W, H);
+
+    // 敵人：紅點（追擊中的較大）
+    const k = W / VIEW;
+    for (const e of combat?.enemies.list ?? []) {
+      if (!e.alive || e.def.dummy) continue;
+      const x = W / 2 + (e.pos.x - player.pos.x) * k, y = H / 2 + (e.pos.z - player.pos.z) * k;
+      if (x < 0 || y < 0 || x > W || y > H) continue;
+      const chasing = e.state !== 'patrol' && e.state !== 'return';
+      ctx.fillStyle = chasing ? '#ff3a2a' : '#e8806a';
+      ctx.beginPath();
+      ctx.arc(x, y, chasing ? 3.5 : 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     // 玩家箭頭（地圖北方朝上，-Z 為北）
     ctx.save();

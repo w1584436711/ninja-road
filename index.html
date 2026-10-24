@@ -39,30 +39,58 @@
 
     <div id="area"></div>
     <div id="toast"></div>
+    <div id="floaters"></div>
+    <div id="jutsuCall"></div>
+    <div id="hurtFlash"></div>
+    <div id="death"><div>你倒下了……</div><small>即將在村子裡復活</small></div>
+
+    <div id="targetFrame" class="hidden">
+      <div id="targetName"></div>
+      <div class="bar tg"><div id="targetFill" class="fill"></div></div>
+    </div>
+
+    <div id="sealBar"></div>
 
     <div id="skills">
-      <div class="slot" data-skill="jump"><span class="key">Space</span><span class="icon">⤒</span><span data-t="skills.jump">二段跳</span><span class="cost">查克拉 10</span></div>
+      <div class="slot" data-skill="attack"><span class="key">左鍵/F</span><span class="icon">👊</span><span data-t="skills.attack">體術</span><span class="cost">三連擊</span></div>
+      <div class="slot" data-skill="kunai"><span class="key">Q</span><span class="icon">🗡</span><span data-t="skills.kunai">苦無</span><span class="cost">投擲</span></div>
       <div class="slot" data-skill="dash"><span class="key">E</span><span class="icon">💨</span><span data-t="skills.dash">迅影步</span><span class="cost">查克拉 15</span></div>
+      <div class="slot" data-skill="sub"><span class="key">X</span><span class="icon">🪵</span><span data-t="skills.sub">替身術</span><span class="cost">查克拉 20</span></div>
+      <div class="slot" data-skill="lock"><span class="key">R</span><span class="icon">◎</span><span data-t="skills.lock">鎖定</span><span class="cost">切換</span></div>
       <div class="slot" data-skill="charge"><span class="key">C</span><span class="icon">🌀</span><span data-t="skills.charge">聚集查克拉</span><span class="cost">按住</span></div>
-      <div class="slot off" data-skill="fire"><span class="key">1</span><span class="icon">🔥</span><span data-t="skills.fire">爆炎球</span><span class="cost">未解鎖</span></div>
+    </div>
+
+    <div id="jutsuPanel">
+      <div class="jp-title">忍術（按 1–4 結印）</div>
+      <div class="jp-seals"></div>
+      <div class="jp-list"></div>
     </div>
 
     <div id="help">
-      <b>WASD</b> 移動　<b>Shift</b> 忍者跑<br>
-      <b>Space</b> 跳躍（空中再按：二段跳）<br>
-      <b>E</b> <span data-t="skills.dash">迅影步</span>　<b>C</b> 按住聚集查克拉<br>
-      <b>滑鼠</b> 轉動視角　<b>滾輪</b> 縮放<br>
-      有查克拉時可在<b>水面行走</b>
+      <b>WASD</b> 移動　<b>Shift</b> 忍者跑　<b>Space</b> 跳<br>
+      <b>左鍵/F</b> 體術　<b>Q</b> 苦無　<b>R</b> 鎖定<br>
+      <b>E</b> <span data-t="skills.dash">迅影步</span>　<b>X</b> <span data-t="skills.sub">替身術</span><br>
+      <b>T</b> 快轉 1 小時　<b>Esc</b> 暫停
     </div>
   </div>
 
   <!-- 手機觸控層 -->
   <div id="touch" class="hidden">
     <div id="stickBase"><div id="stickKnob"></div></div>
+    <div id="tseals">
+      <button class="ts" data-key="Digit1" data-t="seals.0">寅</button>
+      <button class="ts" data-key="Digit2" data-t="seals.1">巳</button>
+      <button class="ts" data-key="Digit3" data-t="seals.2">未</button>
+      <button class="ts" data-key="Digit4" data-t="seals.3">辰</button>
+    </div>
     <div id="tbtns">
-      <button class="tb big" data-key="Space" data-skill="jump">跳<small>二段跳</small></button>
-      <button class="tb" data-key="KeyE" data-skill="dash"><span data-t="skills.dashShort">迅</span><small data-t="skills.dash">迅影步</small></button>
-      <button class="tb" data-key="KeyC" data-skill="charge">蓄<small>查克拉</small></button>
+      <button class="tb big" data-key="KeyF" data-skill="attack">攻<small data-t="skills.attack">體術</small></button>
+      <button class="tb" data-key="Space" data-skill="jump" id="tbJump">跳<small>二段跳</small></button>
+      <button class="tb" data-key="KeyQ" data-skill="kunai" id="tbKunai">苦<small data-t="skills.kunai">苦無</small></button>
+      <button class="tb" data-key="KeyX" data-skill="sub" id="tbSub">替<small data-t="skills.sub">替身術</small></button>
+      <button class="tb" data-key="KeyE" data-skill="dash" id="tbDash"><span data-t="skills.dashShort">迅</span><small data-t="skills.dash">迅影步</small></button>
+      <button class="tb small" data-key="KeyR" data-skill="lock" id="tbLock">鎖</button>
+      <button class="tb small" data-key="KeyC" data-skill="charge" id="tbCharge">蓄</button>
     </div>
     <button id="pauseBtn">❚❚</button>
     <div id="rotateHint">↻ 橫向螢幕遊玩體驗更好</div>
@@ -76,18 +104,21 @@
       <div class="quality-row"><span>畫質</span><div id="quality"></div></div>
       <div class="keys touch-keys">
         <span>左半邊拖曳</span><span>移動（推到底＝忍者跑）</span>
-        <span>右半邊滑動</span><span>轉動視角</span>
-        <span>雙指捏合</span><span>縮放鏡頭</span>
-        <span>技能按鈕</span><span>跳躍・衝刺・聚集查克拉</span>
+        <span>右半邊滑動</span><span>轉動視角，雙指捏合縮放</span>
+        <span>攻／苦／替</span><span>體術・苦無・替身術</span>
+        <span>上排四個印</span><span>依序點擊結印發動忍術</span>
       </div>
       <div class="keys desk-keys">
-        <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>移動</span>
-        <span><kbd>Shift</kbd></span><span>忍者跑</span>
-        <span><kbd>Space</kbd></span><span>跳躍 / 二段跳</span>
-        <span><kbd>E</kbd></span><span><span data-t="skills.dash">迅影步</span>（衝刺）</span>
-        <span><kbd>C</kbd></span><span>聚集查克拉</span>
-        <span><kbd>Esc</kbd></span><span>暫停</span>
+        <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>移動（<kbd>Shift</kbd> 忍者跑）</span>
+        <span><kbd>左鍵</kbd><kbd>F</kbd></span><span>體術三連擊</span>
+        <span><kbd>Q</kbd></span><span>投擲苦無</span>
+        <span><kbd>R</kbd></span><span>鎖定敵人</span>
+        <span><kbd>X</kbd></span><span><span data-t="skills.sub">替身術</span>（閃避）</span>
+        <span><kbd>1</kbd>–<kbd>4</kbd></span><span>結印發動忍術</span>
+        <span><kbd>E</kbd> <kbd>Space</kbd> <kbd>C</kbd></span><span>衝刺・跳躍・聚集查克拉</span>
       </div>
+      <div class="jutsu-ref" id="jutsuRef"></div>
+      <p class="tip">大門外有訓練木樁可以練習</p>
     </div>
   </div>
 

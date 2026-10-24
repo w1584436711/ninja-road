@@ -19,6 +19,8 @@ import { loadQuality, saveQuality, QUALITY_PRESETS } from './core/quality.js';
 import { toonify } from './render/toon.js';
 import { PostFX } from './render/postfx.js';
 import { loadLocalTheme, applyThemeText } from './data/theme.js';
+import { Combat } from './combat/combat.js';
+import { FloatText } from './ui/floatText.js';
 
 // 世界觀設定要在建立任何物件前載入（本機可用 theme.local.js 覆蓋）
 await loadLocalTheme();
@@ -54,6 +56,7 @@ const effects = new Effects(scene);
 const player = new Player(scene, world, effects, { x: 0, z: 40 });
 const villagers = new Villagers(scene, world);
 const camCtl = new ThirdPersonCamera(camera);
+camCtl.world = world; // 鏡頭避開樹幹
 const input = new Input(canvas);
 const hud = new HUD(new Minimap(document.getElementById('minimap'), village.houses));
 player.onNotice = msg => hud.toast(msg);
@@ -71,6 +74,10 @@ document.getElementById('clock').addEventListener('pointerdown', e => {
   sky.advanceHours(1);
 });
 const grass = new Grass(scene, world, quality); // 草在 toonify 之後建立，本身已是賽璐璐材質
+
+// ---------- 戰鬥 ----------
+const floatText = new FloatText(camera);
+const combat = new Combat({ scene, world, effects, player, camCtl, floatText, hud });
 
 // ---------- 畫質選擇 ----------
 const qualityRow = document.getElementById('quality');
@@ -132,24 +139,29 @@ addEventListener('resize', () => {
 // ---------- 主迴圈 ----------
 const clock = new THREE.Clock();
 function frame() {
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const realDt = Math.min(clock.getDelta(), 0.05);
+  const dt = playing ? combat.timeScale(realDt) : realDt; // 命中停頓時放慢
   sharedTime.value += dt;
   if (playing) {
+    if (input.pressed('KeyT')) sky.advanceHours(1);
     camCtl.handleInput(input);
+    combat.preUpdate(dt, input);
     player.update(dt, input, camCtl.yaw);
+    combat.update(dt);
   } else {
     camCtl.yaw += dt * 0.08; // 開始畫面時鏡頭緩慢環繞
   }
   villagers.update(dt);
   effects.update(dt);
+  floatText.update(realDt);
   grass.update(player.pos);
-  camCtl.update(dt, player.pos);
+  camCtl.update(realDt, player.pos);
   sky.update(dt, player.pos, camera.position);
-  if (playing) hud.update(dt, player, sky);
+  if (playing) hud.update(realDt, player, sky, combat);
   input.endFrame();
   post.render();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
-window.game = { scene, player, camCtl, world, renderer, input, hud, post, quality, grass, sharedTime, sky };
+window.game = { scene, player, camCtl, world, renderer, input, hud, post, quality, grass, sharedTime, sky, combat, floatText, effects };
