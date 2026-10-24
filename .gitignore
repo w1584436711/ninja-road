@@ -1,0 +1,9 @@
+# 本機私人世界觀設定（不公開）
+src/data/theme.local.js
+
+# 線上發佈用的產生檔
+artifact.html
+
+node_modules/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0d1320">
+  <title>忍者之路 Online</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="status">
+      <div class="portrait">忍</div>
+      <div class="bars">
+        <div class="name"><span data-t="player.name">天宮 翔</span><span class="lv"><span data-t="player.rank">下忍</span> Lv.1</span></div>
+        <div class="bar hp"><div id="hpFill" class="fill"></div><span id="hpText"></span></div>
+        <div class="bar ck"><div id="ckFill" class="fill"></div><span id="ckText"></span></div>
+      </div>
+    </div>
+
+    <div id="mapbox">
+      <canvas id="minimap" width="180" height="180"></canvas>
+      <div id="areaLabel"></div>
+      <div id="coords"></div>
+    </div>
+
+    <div id="area"></div>
+    <div id="toast"></div>
+
+    <div id="skills">
+      <div class="slot" data-skill="jump"><span class="key">Space</span><span class="icon">⤒</span><span data-t="skills.jump">二段跳</span><span class="cost">查克拉 10</span></div>
+      <div class="slot" data-skill="dash"><span class="key">E</span><span class="icon">💨</span><span data-t="skills.dash">迅影步</span><span class="cost">查克拉 15</span></div>
+      <div class="slot" data-skill="charge"><span class="key">C</span><span class="icon">🌀</span><span data-t="skills.charge">聚集查克拉</span><span class="cost">按住</span></div>
+      <div class="slot off" data-skill="fire"><span class="key">1</span><span class="icon">🔥</span><span data-t="skills.fire">爆炎球</span><span class="cost">未解鎖</span></div>
+    </div>
+
+    <div id="help">
+      <b>WASD</b> 移動　<b>Shift</b> 忍者跑<br>
+      <b>Space</b> 跳躍（空中再按：二段跳）<br>
+      <b>E</b> <span data-t="skills.dash">迅影步</span>　<b>C</b> 按住聚集查克拉<br>
+      <b>滑鼠</b> 轉動視角　<b>滾輪</b> 縮放<br>
+      有查克拉時可在<b>水面行走</b>
+    </div>
+  </div>
+
+  <!-- 手機觸控層 -->
+  <div id="touch" class="hidden">
+    <div id="stickBase"><div id="stickKnob"></div></div>
+    <div id="tbtns">
+      <button class="tb big" data-key="Space" data-skill="jump">跳<small>二段跳</small></button>
+      <button class="tb" data-key="KeyE" data-skill="dash"><span data-t="skills.dashShort">迅</span><small data-t="skills.dash">迅影步</small></button>
+      <button class="tb" data-key="KeyC" data-skill="charge">蓄<small>查克拉</small></button>
+    </div>
+    <button id="pauseBtn">❚❚</button>
+    <div id="rotateHint">↻ 橫向螢幕遊玩體驗更好</div>
+  </div>
+
+  <div id="overlay">
+    <div class="panel">
+      <h1>忍者之路</h1>
+      <p class="sub" data-t="subtitle">原創忍者 3D 開放世界</p>
+      <button id="startBtn">點擊開始</button>
+      <div class="quality-row"><span>畫質</span><div id="quality"></div></div>
+      <div class="keys touch-keys">
+        <span>左半邊拖曳</span><span>移動（推到底＝忍者跑）</span>
+        <span>右半邊滑動</span><span>轉動視角</span>
+        <span>雙指捏合</span><span>縮放鏡頭</span>
+        <span>技能按鈕</span><span>跳躍・衝刺・聚集查克拉</span>
+      </div>
+      <div class="keys desk-keys">
+        <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>移動</span>
+        <span><kbd>Shift</kbd></span><span>忍者跑</span>
+        <span><kbd>Space</kbd></span><span>跳躍 / 二段跳</span>
+        <span><kbd>E</kbd></span><span><span data-t="skills.dash">迅影步</span>（衝刺）</span>
+        <span><kbd>C</kbd></span><span>聚集查克拉</span>
+        <span><kbd>Esc</kbd></span><span>暫停</span>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
