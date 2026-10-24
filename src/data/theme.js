@@ -24,7 +24,7 @@ export const THEME = {
     mountains: { name: '蒼穹之國・山岳地帶', sub: 'Mountains' },
   },
 
-  signs: { tower: '風', gate: '風鈴', shop: '鈴屋' },
+  signs: { tower: '風', gate: '風鈴', shop: '鈴屋', toolshop: '忍具' },
   colors: { tower: 0x2f6f8f, towerRoof: 0x1d4560, towerBand: 0x22303a, gate: 0xc0392b, gateBeam: 0x2a2626 },
 
   npcs: { villager: '風鈴村民', chunin: '風鈴中忍', student: '忍術學堂學生', shopOwner: '鈴屋老闆' },
@@ -34,9 +34,23 @@ export const THEME = {
     attack: '體術', kunai: '苦無', sub: '替身術', lock: '鎖定',
   },
 
-  // 忍術與結印（印的順序在 combat/jutsu.js）
-  jutsu: { fireball: '爆炎球', clone: '分身術', wind: '裂風刃' },
+  // 忍者階級（達到等級即晉升）
+  ranks: [
+    { level: 1, name: '下忍' }, { level: 5, name: '中忍' }, { level: 10, name: '上忍' },
+    { level: 15, name: '精英上忍' }, { level: 20, name: '傳說忍者' },
+  ],
+
+  // 忍術名稱與結印（效果、印的順序在 combat/jutsu.js）
+  jutsu: {
+    clone: '分身術',
+    fireball: '爆炎球', firedragon: '火龍炎',
+    wind: '裂風刃', whirlwind: '旋風陣',
+    thunder: '雷光槍', lightning: '落雷',
+    waterbullet: '水彈', torrent: '激流波',
+    rockspike: '岩槍', rockslam: '岩崩',
+  },
   seals: ['寅', '巳', '未', '辰'],
+  natures: { fire: '火', wind: '風', lightning: '雷', water: '水', earth: '土' },
 
   enemies: { wolf: '野狼', bandit: '山賊', rogue: '流浪忍者', dummy: '訓練木樁' },
 };

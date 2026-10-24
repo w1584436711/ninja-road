@@ -11,16 +11,16 @@ import { THEME } from '../data/theme.js';
 export const ENEMY_TYPES = {
   wolf: {
     level: 2, hp: 45, radius: 0.6, height: 1.0, walk: 2.5, run: 9.5, sight: 16, range: 1.9,
-    damage: 8, windup: 0.4, recover: 1.0, exp: 12, model: 'wolf', pack: true,
+    damage: 8, windup: 0.4, recover: 1.0, exp: 12, gold: [2, 5], model: 'wolf', pack: true,
   },
   bandit: {
     level: 4, hp: 80, radius: 0.45, height: 1.8, walk: 2, run: 6.5, sight: 14, range: 2.2,
-    damage: 14, windup: 0.6, recover: 1.3, exp: 22, model: 'human', attack: 'slash',
+    damage: 14, windup: 0.6, recover: 1.3, exp: 22, gold: [6, 12], model: 'human', attack: 'slash',
     look: { jacket: 0x7a5a3a, pants: 0x4a3a2a, shoulders: 0x5a4028, hair: 0x2a1a10, spiky: false, band: false, weapon: 'sword' },
   },
   rogue: {
     level: 7, hp: 110, radius: 0.45, height: 1.8, walk: 2.5, run: 8.5, sight: 22, range: 1.9,
-    damage: 12, windup: 0.4, recover: 0.9, exp: 40, model: 'human', attack: 'punch1',
+    damage: 12, windup: 0.4, recover: 0.9, exp: 40, gold: [12, 20], model: 'human', attack: 'punch1',
     ranged: { min: 6, max: 18, cd: 2.6, damage: 10 }, dodge: 0.3,
     look: { jacket: 0x2a2a34, pants: 0x1e1e26, shoulders: 0x5a1f2a, hair: 0x9aa0a8, spiky: true, band: true, scarf: 0x5a1f2a },
   },
@@ -135,7 +135,7 @@ class Enemy {
   }
 
   // 回傳 'dodged' / 'killed' / 'hit'
-  takeHit(dmg, from, kb, combat) {
+  takeHit(dmg, from, kb, combat, opts = {}) {
     if (!this.alive) return null;
     const d = this.def;
     const ft = combat.floatText;
@@ -165,7 +165,8 @@ class Enemy {
       return 'killed';
     }
     this.state = 'hurt';
-    this.timer = kb >= 8 ? 0.65 : 0.3;
+    this.timer = Math.max(kb >= 8 ? 0.65 : 0.3, opts.stun ?? 0);
+    if (opts.stun) combat.floatText.spawn('暈眩', this._chest.set(this.pos.x, this.pos.y + this.def.height + 0.4, this.pos.z), 'info');
     const dx = this.pos.x - from.x, dz = this.pos.z - from.z;
     const len = Math.hypot(dx, dz) || 1;
     this.vel.set((dx / len) * kb, 0, (dz / len) * kb);
@@ -188,7 +189,7 @@ class Enemy {
     this.deadTimer = 0;
     this.state = 'dead';
     combat.effects.smoke(this.chest, 10, 0xd8d8d8, 0.45);
-    combat.gainExp(this.def.exp, this._chest.set(this.pos.x, this.pos.y + this.def.height + 0.8, this.pos.z));
+    combat.onEnemyKilled(this);
   }
 
   face(target, dt, rate = 10) {

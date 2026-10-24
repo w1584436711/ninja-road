@@ -1,13 +1,7 @@
 import * as THREE from 'three';
 import { lerpAngle } from '../core/math.js';
 import { THEME } from '../data/theme.js';
-
-// 結印：印的編號對應 THEME.seals（0 寅、1 巳、2 未、3 辰），鍵盤 1–4
-export const JUTSU = [
-  { key: 'fireball', seals: [1, 0], cost: 25 },
-  { key: 'clone', seals: [2, 1, 0], cost: 30 },
-  { key: 'wind', seals: [3, 2], cost: 20 },
-];
+import { JUTSU, performJutsu, jutsuName } from './jutsu.js';
 
 // 體術三連擊：最後一下迴旋踢會把敵人踢飛
 const COMBO = [
@@ -125,7 +119,7 @@ export class PlayerCombat {
       if (!e.alive) continue;
       const dx = e.pos.x - cx, dz = e.pos.z - cz;
       if (dx * dx + dz * dz < (1.3 + e.def.radius) ** 2 && Math.abs(e.pos.y - p.pos.y) < 1.6) {
-        this.c.hitEnemy(e, step.dmg, p.pos, step.kb, { melee: true });
+        this.c.hitEnemy(e, Math.round(step.dmg * p.meleeMul), p.pos, step.kb);
         any = true;
       }
     }
@@ -159,7 +153,7 @@ export class PlayerCombat {
       onHit: () => {
         const f = this.forward(Math.atan2(dir.x, dir.z));
         const pos = new THREE.Vector3(p.pos.x + f.z * -0.3 + f.x * 0.4, p.pos.y + 1.4, p.pos.z + f.x * 0.3 + f.z * 0.4);
-        this.c.projectiles.spawn({ kind: 'kunai', owner: 'player', pos, dir, speed: 38, gravity: 4, damage: 8, radius: 0.3, kb: 1.5 });
+        this.c.projectiles.spawn({ kind: 'kunai', owner: 'player', pos, dir, speed: 38, gravity: 4, damage: Math.round(8 * p.meleeMul), radius: 0.3, kb: 1.5 });
       },
     });
   }
@@ -201,55 +195,20 @@ export class PlayerCombat {
     const match = JUTSU.find(j => j.seals.join(',') === seq);
     if (match) {
       this.seals = [];
-      this.cast(match);
+      if (this.c.progress.knows(match.key)) this.cast(match);
+      else this.c.notice(`尚未習得「${jutsuName(match)}」`);
     } else if (!JUTSU.some(j => j.seals.join(',').startsWith(seq))) {
       this.seals = [];
       this.c.notice('結印失敗');
     }
   }
 
-  cast(j) {
-    const p = this.p;
-    if (!p.useChakra(j.cost)) return;
-    const c = this.c;
-    c.hud.jutsuCall(THEME.jutsu[j.key]);
-    const tgt = this.softTarget(22, 0.7);
-    const face = tgt ? this.angleTo(tgt) : p.facing;
-
-    if (j.key === 'fireball') {
-      this.start('cast', 0.4, {
-        hitAt: 0.5, face,
-        onHit: () => {
-          const dir = tgt ? this.aimAt(tgt) : this.forward(face).clone();
-          const f = this.forward(face);
-          const pos = new THREE.Vector3(p.pos.x + f.x * 1.1, p.pos.y + 1.3, p.pos.z + f.z * 1.1);
-          c.projectiles.spawn({ kind: 'fireball', owner: 'player', pos, dir, speed: 22, damage: 30, radius: 0.7, kb: 6, aoe: { r: 4, dmg: 18 } });
-        },
-      });
-    } else if (j.key === 'clone') {
-      this.start('cast', 0.35, { hitAt: 0.5, face, onHit: () => c.spawnClones() });
-    } else if (j.key === 'wind') {
-      this.start('cast', 0.35, {
-        hitAt: 0.45, face,
-        onHit: () => {
-          const f = this.forward(face).clone();
-          // 扇形範圍內全部命中並擊退
-          for (const e of c.enemies.list) {
-            if (!e.alive) continue;
-            const d = Math.hypot(e.pos.x - p.pos.x, e.pos.z - p.pos.z);
-            let diff = Math.abs(this.angleTo(e) - face) % (Math.PI * 2);
-            if (diff > Math.PI) diff = Math.PI * 2 - diff;
-            if (d < 8 && diff < 0.65) c.hitEnemy(e, 22, p.pos, 12);
-          }
-          for (const [k, delay] of [[0, 0], [1, 0.06], [2, 0.12]]) {
-            setTimeout(() => c.projectiles.spawn({
-              kind: 'wind', owner: 'none', pos: new THREE.Vector3(p.pos.x, p.pos.y + 1 + k * 0.25, p.pos.z), dir: f, speed: 20, life: 0.4,
-            }), delay * 1000);
-          }
-          c.camCtl.shake = 0.2;
-        },
-      });
-    }
+  cast(def) {
+    const prog = this.c.progress;
+    if (!this.p.useChakra(prog.jutsuCost(def))) return;
+    this.c.hud.jutsuCall(jutsuName(def));
+    performJutsu(this, def, prog.jutsuMul(def.key));
+    if (prog.recordCast(def.key)) this.c.notice(`「${jutsuName(def)}」熟練度提升！`);
   }
 
   update(dt, input) {

@@ -22,13 +22,16 @@
 
   <div id="hud" class="hidden">
     <div id="status">
-      <div class="portrait">忍</div>
+      <button class="portrait" id="menuBtn" title="角色選單（Tab）">忍</button>
       <div class="bars">
-        <div class="name"><span data-t="player.name">天宮 翔</span><span class="lv"><span data-t="player.rank">下忍</span> Lv.1</span></div>
+        <div class="name"><span data-t="player.name">天宮 翔</span><span class="lv" id="plv">下忍 Lv.1</span><span class="gold" id="gold"></span></div>
         <div class="bar hp"><div id="hpFill" class="fill"></div><span id="hpText"></span></div>
         <div class="bar ck"><div id="ckFill" class="fill"></div><span id="ckText"></span></div>
+        <div class="bar xp thin"><div id="xpFill" class="fill"></div></div>
       </div>
     </div>
+    <div id="interact" class="hidden"></div>
+    <div id="levelCall"></div>
 
     <div id="mapbox">
       <canvas id="minimap" width="180" height="180"></canvas>
@@ -58,6 +61,8 @@
       <div class="slot" data-skill="sub"><span class="key">X</span><span class="icon">🪵</span><span data-t="skills.sub">替身術</span><span class="cost">查克拉 20</span></div>
       <div class="slot" data-skill="lock"><span class="key">R</span><span class="icon">◎</span><span data-t="skills.lock">鎖定</span><span class="cost">切換</span></div>
       <div class="slot" data-skill="charge"><span class="key">C</span><span class="icon">🌀</span><span data-t="skills.charge">聚集查克拉</span><span class="cost">按住</span></div>
+      <div class="slot item"><span class="key">5</span><span class="icon">💊</span>傷藥<span class="cost">×<span data-count="potion">0</span></span></div>
+      <div class="slot item"><span class="key">6</span><span class="icon">🍙</span>兵糧丸<span class="cost">×<span data-count="pill">0</span></span></div>
     </div>
 
     <div id="jutsuPanel">
@@ -70,7 +75,25 @@
       <b>WASD</b> 移動　<b>Shift</b> 忍者跑　<b>Space</b> 跳<br>
       <b>左鍵/F</b> 體術　<b>Q</b> 苦無　<b>R</b> 鎖定<br>
       <b>E</b> <span data-t="skills.dash">迅影步</span>　<b>X</b> <span data-t="skills.sub">替身術</span><br>
+      <b>Tab</b> 角色選單　<b>G</b> 互動<br>
       <b>T</b> 快轉 1 小時　<b>Esc</b> 暫停
+    </div>
+  </div>
+
+  <!-- 角色選單／商店 -->
+  <div id="menu" class="hidden">
+    <div class="menu-panel" role="dialog" aria-labelledby="menuTitle">
+      <div class="menu-head">
+        <div id="menuTitle"></div>
+        <button id="menuClose" aria-label="關閉">✕</button>
+      </div>
+      <div id="menuTabs">
+        <button data-tab="status">能力</button>
+        <button data-tab="jutsu">忍術</button>
+        <button data-tab="items">道具</button>
+        <button data-tab="system">系統</button>
+      </div>
+      <div id="menuBody"></div>
     </div>
   </div>
 
@@ -92,7 +115,13 @@
       <button class="tb small" data-key="KeyR" data-skill="lock" id="tbLock">鎖</button>
       <button class="tb small" data-key="KeyC" data-skill="charge" id="tbCharge">蓄</button>
     </div>
+    <div id="titems">
+      <button class="ts item" data-key="Digit5">藥<small data-count="potion">0</small></button>
+      <button class="ts item" data-key="Digit6">丸<small data-count="pill">0</small></button>
+    </div>
+    <button class="tb" data-key="KeyG" id="tbInteract" hidden>店</button>
     <button id="pauseBtn">❚❚</button>
+    <button id="menuBtn2">選單</button>
     <div id="rotateHint">↻ 橫向螢幕遊玩體驗更好</div>
   </div>
 

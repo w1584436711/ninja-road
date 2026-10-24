@@ -21,6 +21,12 @@ import { PostFX } from './render/postfx.js';
 import { loadLocalTheme, applyThemeText } from './data/theme.js';
 import { Combat } from './combat/combat.js';
 import { FloatText } from './ui/floatText.js';
+import { Progression } from './progress/progression.js';
+import { RAMEN_PRICE } from './progress/items.js';
+import { Menu } from './ui/menu.js';
+import { STALLS } from './world/village.js';
+import { getTerrainHeight } from './world/terrain.js';
+import { THEME } from './data/theme.js';
 
 // 世界觀設定要在建立任何物件前載入（本機可用 theme.local.js 覆蓋）
 await loadLocalTheme();
@@ -58,7 +64,16 @@ const villagers = new Villagers(scene, world);
 const camCtl = new ThirdPersonCamera(camera);
 camCtl.world = world; // 鏡頭避開樹幹
 const input = new Input(canvas);
-const hud = new HUD(new Minimap(document.getElementById('minimap'), village.houses));
+
+// ---------- 成長與存檔 ----------
+const progress = new Progression(player);
+if (progress.pos) {
+  const [x, z] = progress.pos;
+  player.pos.set(x, Math.max(getTerrainHeight(x, z), 0), z);
+}
+if (progress.hour !== null) sky.hour = progress.hour;
+
+const hud = new HUD(new Minimap(document.getElementById('minimap'), village.houses), progress);
 player.onNotice = msg => hud.toast(msg);
 const touchControls = touch ? new TouchControls(input) : null;
 
@@ -77,7 +92,64 @@ const grass = new Grass(scene, world, quality); // 草在 toonify 之後建立�
 
 // ---------- 戰鬥 ----------
 const floatText = new FloatText(camera);
-const combat = new Combat({ scene, world, effects, player, camCtl, floatText, hud });
+const combat = new Combat({ scene, world, effects, player, camCtl, floatText, hud, progress });
+
+progress.onLevelUp = (level, newRank, canPickNature) => {
+  hud.levelUp(level, newRank, canPickNature);
+  hud.refreshJutsu();
+  const at = new THREE.Vector3(player.pos.x, player.pos.y + 0.1, player.pos.z);
+  effects.ring(at, 0xffe08a, 4, 0.8);
+  effects.ring(at, 0xffffff, 2.5, 0.6);
+  for (let i = 0; i < 20; i++) effects.spark(new THREE.Vector3(player.pos.x + (Math.random() - 0.5) * 1.6, player.pos.y + Math.random() * 0.5, player.pos.z + (Math.random() - 0.5) * 1.6), 0xffe08a);
+};
+
+// ---------- 選單、商店、拉麵攤 ----------
+const menu = new Menu(progress, player, hud);
+function openMenu(kind = 'menu') {
+  if (!playing || menu.isOpen) return;
+  if (kind === 'shop') menu.openShop();
+  else menu.open();
+  if (!touch) document.exitPointerLock?.();
+}
+menu.onClose = () => {
+  hud.refreshJutsu();
+  if (!touch && playing) {
+    try { canvas.requestPointerLock?.()?.catch?.(() => {}); } catch { /* 忽略 */ }
+  }
+};
+for (const id of ['menuBtn', 'menuBtn2']) {
+  document.getElementById(id).addEventListener('pointerdown', e => {
+    e.stopPropagation();
+    openMenu();
+  });
+}
+
+const interactEl = document.getElementById('interact');
+const interactBtn = document.getElementById('tbInteract');
+let nearStall = null;
+function updateInteract() {
+  nearStall = STALLS.find(s => Math.hypot(player.pos.x - s.x, player.pos.z - (s.z + 3.2)) < 3.2) ?? null;
+  const label = !nearStall ? '' : nearStall.key === 'shop'
+    ? `${touch ? '點「店」' : '按 G'} 打開${THEME.signs.toolshop}店`
+    : `${touch ? '點「麵」' : '按 G'} 吃拉麵（${RAMEN_PRICE} 兩，HP・查克拉全滿）`;
+  interactEl.classList.toggle('hidden', !nearStall);
+  if (interactEl.textContent !== label) interactEl.textContent = label;
+  interactBtn.hidden = !nearStall;
+  if (nearStall) interactBtn.textContent = nearStall.key === 'shop' ? '店' : '麵';
+}
+function interact() {
+  if (!nearStall) return;
+  if (nearStall.key === 'shop') {
+    openMenu('shop');
+  } else if (progress.pay(RAMEN_PRICE)) {
+    player.hp = player.maxHp;
+    player.chakra = player.maxChakra;
+    hud.toast('好吃！HP、查克拉全滿');
+  } else {
+    hud.toast('錢不夠');
+  }
+}
+let saveTimer = 15;
 
 // ---------- 畫質選擇 ----------
 const qualityRow = document.getElementById('quality');
@@ -123,7 +195,7 @@ startBtn.addEventListener('click', () => {
 });
 document.getElementById('pauseBtn').addEventListener('click', pause);
 document.addEventListener('pointerlockchange', () => {
-  if (document.pointerLockElement !== canvas && playing && !touch) pause();
+  if (document.pointerLockElement !== canvas && playing && !touch && !menu.isOpen) pause();
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && playing) pause();
@@ -140,20 +212,30 @@ addEventListener('resize', () => {
 const clock = new THREE.Clock();
 function frame() {
   const realDt = Math.min(clock.getDelta(), 0.05);
-  const dt = playing ? combat.timeScale(realDt) : realDt; // 命中停頓時放慢
+  const active = playing && !menu.isOpen; // 選單開著時遊戲暫停
+  const dt = active ? combat.timeScale(realDt) : playing ? 0 : realDt; // 命中停頓時放慢
   sharedTime.value += dt;
-  if (playing) {
+  if (active) {
     if (input.pressed('KeyT')) sky.advanceHours(1);
+    if (input.pressed('Tab')) openMenu();
+    if (input.pressed('KeyG')) interact();
+    if (input.pressed('Digit5')) hud.toast(progress.useItem('potion'));
+    if (input.pressed('Digit6')) hud.toast(progress.useItem('pill'));
     camCtl.handleInput(input);
     combat.preUpdate(dt, input);
     player.update(dt, input, camCtl.yaw);
     combat.update(dt);
-  } else {
+    updateInteract();
+    if ((saveTimer -= realDt) <= 0) {
+      progress.save(sky.hour);
+      saveTimer = 15;
+    }
+  } else if (!playing) {
     camCtl.yaw += dt * 0.08; // 開始畫面時鏡頭緩慢環繞
   }
   villagers.update(dt);
   effects.update(dt);
-  floatText.update(realDt);
+  floatText.update(active ? realDt : 0);
   grass.update(player.pos);
   camCtl.update(realDt, player.pos);
   sky.update(dt, player.pos, camera.position);
@@ -164,4 +246,7 @@ function frame() {
 }
 requestAnimationFrame(frame);
 
-window.game = { scene, player, camCtl, world, renderer, input, hud, post, quality, grass, sharedTime, sky, combat, floatText, effects };
+window.game = { scene, player, camCtl, world, renderer, input, hud, post, quality, grass, sharedTime, sky, combat, floatText, effects, progress, menu, ui: { updateInteract, interact, openMenu } };
+
+// 關閉或切到背景前存檔
+addEventListener('pagehide', () => progress.save(sky.hour));

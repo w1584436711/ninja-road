@@ -54,7 +54,11 @@ export class Player {
     this.hp = 100;
     this.maxChakra = 100;
     this.chakra = 100;
-    this.exp = 0;
+    // 由 progress/progression.js 依能力值與裝備設定
+    this.moveMul = 1;
+    this.chakraRegenMul = 1;
+    this.meleeMul = 1;
+    this.defMul = 1;
 
     // 戰鬥狀態（由 combat/playerCombat.js 設定）
     this.dead = false;
@@ -115,7 +119,7 @@ export class Player {
     if (len > 0) { dx /= len; dz /= len; }
 
     this.sprinting = (input.down('ShiftLeft') || input.down('ShiftRight') || stickSprint) && len > 0 && !this.swimming;
-    const speed = (this.swimming ? SWIM_SPEED : this.sprinting ? SPRINT_SPEED : WALK_SPEED) * (this.sprinting ? 1 : throttle) * this.moveScale;
+    const speed = (this.swimming ? SWIM_SPEED : this.sprinting ? SPRINT_SPEED : WALK_SPEED) * (this.sprinting ? 1 : throttle) * this.moveScale * this.moveMul;
 
     // ---------- 衝刺技能（E） ----------
     this.dashCd = Math.max(0, this.dashCd - dt);
@@ -204,8 +208,8 @@ export class Player {
 
     // ---------- 查克拉 ----------
     if (this.onWater) this.chakra -= (this.sprinting ? 7 : 4) * dt;
-    else if (this.charging) this.chakra += 35 * dt;
-    else if (this.onGround && !this.swimming) this.chakra += 3 * dt;
+    else if (this.charging) this.chakra += 35 * this.chakraRegenMul * dt;
+    else if (this.onGround && !this.swimming) this.chakra += 3 * this.chakraRegenMul * dt;
     this.chakra = clamp(this.chakra, 0, this.maxChakra);
 
     // ---------- 特效 ----------

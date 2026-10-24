@@ -235,28 +235,45 @@ function createPowerLines(group) {
   }
 }
 
-// 拉麵攤：櫃台、屋簷、布簾和高腳椅
-const RAMEN = { x: -12, z: 20, w: 7, d: 4 };
-function createRamenShop(group, world) {
-  const { x, z, w, d } = RAMEN;
+// 廣場旁的兩個攤位：拉麵攤（吃了回滿）與忍具店（買道具、裝備）。key 對應 main.js 的互動
+export const STALLS = [
+  { key: 'ramen', x: -12, z: 20, w: 7, d: 4, roof: 0xc0462f, fg: '#b3261e' },
+  { key: 'shop', x: 12, z: 20, w: 7, d: 4, roof: 0x3d6fa8, fg: '#1d3f78' },
+];
+
+function createStall(group, world, s) {
+  const { x, z, w, d } = s;
   const base = getTerrainHeight(x, z);
   group.add(box(w, 3, d, 0xe9dcc0, x, base + 1.5, z - 0.6));
   group.add(box(w, 1.1, 0.6, 0x9c6b3e, x, base + 0.55, z + 1.6)); // 櫃台
   group.add(box(w + 0.6, 0.15, 0.9, 0x7a4f2e, x, base + 1.15, z + 1.7));
-  const roof = box(w + 1.2, 0.25, d + 1.4, 0xc0462f, x, base + 3.3, z + 0.2);
+  const roof = box(w + 1.2, 0.25, d + 1.4, s.roof, x, base + 3.3, z + 0.2);
   roof.rotation.x = -0.12;
   group.add(roof);
   // 布簾
-  const tex = textTexture(THEME.signs.shop, { width: 512, height: 160, bg: '#f4efe4', fg: '#b3261e', font: 'bold 110px "Microsoft JhengHei", sans-serif' });
+  const sign = s.key === 'ramen' ? THEME.signs.shop : THEME.signs.toolshop;
+  const tex = textTexture(sign, { width: 512, height: 160, bg: '#f4efe4', fg: s.fg, font: 'bold 110px "Microsoft JhengHei", sans-serif' });
   const noren = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.4, 0.9), new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide }));
   noren.position.set(x, base + 2.6, z + 2.75);
   group.add(noren);
-  for (let i = 0; i < 4; i++) {
-    const sx = x - 2.4 + i * 1.6;
-    group.add(box(0.12, 0.8, 0.12, 0x4a3324, sx, base + 0.4, z + 2.6));
-    const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.12, 12), mat(0xc0462f));
-    seat.position.set(sx, base + 0.85, z + 2.6);
-    group.add(seat);
+  if (s.key === 'ramen') {
+    for (let i = 0; i < 4; i++) {
+      const sx = x - 2.4 + i * 1.6;
+      group.add(box(0.12, 0.8, 0.12, 0x4a3324, sx, base + 0.4, z + 2.6));
+      const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.12, 12), mat(0xc0462f));
+      seat.position.set(sx, base + 0.85, z + 2.6);
+      group.add(seat);
+    }
+  } else {
+    // 櫃台上擺卷軸和忍具
+    const colors = [0xb3261e, 0x3d6fa8, 0xd8a83a, 0x5a8f4e];
+    for (let i = 0; i < 6; i++) {
+      const scroll = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.6, 10), mat(colors[i % 4]));
+      scroll.rotation.z = Math.PI / 2;
+      scroll.position.set(x - 2.6 + i * 1.05, base + 1.32, z + 1.7);
+      group.add(scroll);
+    }
+    group.add(box(2.6, 1.6, 0.1, 0x7a4f2e, x, base + 1.9, z + 1.42)); // 背後的掛板
   }
   world.addBox(x, z - 0.6, w, d, base + 3.4);
   world.addBox(x, z + 1.6, w, 0.6, base + 1.25);
@@ -290,7 +307,9 @@ export function createVillage(world) {
   createLanterns(group);
   createFence(group, world);
   createPowerLines(group);
-  createRamenShop(group, world);
-  houses.push({ x: RAMEN.x, z: RAMEN.z, w: RAMEN.w, d: RAMEN.d + 1 });
+  for (const s of STALLS) {
+    createStall(group, world, s);
+    houses.push({ x: s.x, z: s.z, w: s.w, d: s.d + 1 });
+  }
   return { group, houses };
 }

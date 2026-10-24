@@ -1,17 +1,21 @@
 import { getAreaKey } from '../world/terrain.js';
 import { THEME } from '../data/theme.js';
-import { JUTSU } from '../combat/playerCombat.js';
+import { JUTSU, jutsuName, sealText } from '../combat/jutsu.js';
 
 export class HUD {
-  constructor(minimap) {
+  constructor(minimap, progress) {
     const $ = id => document.getElementById(id);
     this.minimap = minimap;
+    this.prog = progress;
     this.el = {
       hpFill: $('hpFill'), hpText: $('hpText'), ckFill: $('ckFill'), ckText: $('ckText'),
       coords: $('coords'), areaLabel: $('areaLabel'), area: $('area'), toast: $('toast'), clock: $('clock'),
       targetFrame: $('targetFrame'), targetName: $('targetName'), targetFill: $('targetFill'),
       sealBar: $('sealBar'), jutsuCall: $('jutsuCall'), hurtFlash: $('hurtFlash'), death: $('death'),
+      plv: $('plv'), xpFill: $('xpFill'), gold: $('gold'), levelCall: $('levelCall'),
+      potion: document.querySelectorAll('[data-count="potion"]'), pill: document.querySelectorAll('[data-count="pill"]'),
     };
+    this.levelTimer = 0;
     // 同一技能可能同時有技能列格子與觸控按鈕
     this.slots = {};
     document.querySelectorAll('[data-skill]').forEach(s => {
@@ -22,16 +26,35 @@ export class HUD {
     this.toastTimer = 0;
     this.callTimer = 0;
     this.sealKey = '';
-    this.fillJutsuLists();
+    this.refreshJutsu();
   }
 
-  // 忍術一覽：桌機右下角面板與開始畫面
-  fillJutsuLists() {
-    const seals = THEME.seals;
-    const rows = JUTSU.map(j => `<div><b>${THEME.jutsu[j.key]}</b>　${j.seals.map(s => seals[s]).join(' → ')}　<span class="cost">查克拉 ${j.cost}</span></div>`).join('');
-    document.querySelector('#jutsuPanel .jp-seals').textContent = seals.map((s, i) => `${i + 1} ${s}`).join('　');
-    document.querySelector('#jutsuPanel .jp-list').innerHTML = rows;
+  // 已習得的忍術一覽：桌機右下角面板與開始畫面
+  refreshJutsu() {
+    const known = JUTSU.filter(j => this.prog.knows(j.key));
+    const rows = known.map(j => `<div><b>${jutsuName(j)}</b>　${sealText(j)}　<span class="cost">查克拉 ${this.prog.jutsuCost(j)}</span></div>`).join('');
+    const more = '<div class="jp-more">升級後在選單（Tab）學習更多忍術</div>';
+    document.querySelector('#jutsuPanel .jp-seals').textContent = THEME.seals.map((s, i) => `${i + 1} ${s}`).join('　');
+    document.querySelector('#jutsuPanel .jp-list').innerHTML = rows + more;
     document.getElementById('jutsuRef').innerHTML = rows;
+    this.sealKey = null; // 強制重畫結印提示
+  }
+
+  levelUp(level, newRank, canPickNature) {
+    const el = this.el.levelCall;
+    el.replaceChildren();
+    const big = document.createElement('div');
+    big.textContent = newRank ? `晉升${newRank}！` : 'LEVEL UP!';
+    const small = document.createElement('small');
+    small.textContent = `Lv.${level}　能力點 +3　忍術點 +1${canPickNature ? '　可以選擇查克拉屬性了！' : ''}`;
+    el.append(big, small);
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+    this.levelTimer = 3;
+    // 同一時間只顯示一個大標題，避免重疊
+    this.el.area.classList.remove('show');
+    this.areaTimer = 0;
   }
 
   toast(msg) {
@@ -69,10 +92,18 @@ export class HUD {
     e.hpText.textContent = `HP ${Math.ceil(player.hp)} / ${player.maxHp}`;
     e.ckFill.style.width = `${(player.chakra / player.maxChakra) * 100}%`;
     e.ckText.textContent = `查克拉 ${Math.floor(player.chakra)} / ${player.maxChakra}`;
-    e.coords.textContent = `X ${player.pos.x.toFixed(0)}  Z ${player.pos.z.toFixed(0)}　EXP ${player.exp}`;
+    e.coords.textContent = `X ${player.pos.x.toFixed(0)}  Z ${player.pos.z.toFixed(0)}`;
+    const pr = this.prog;
+    const lv = `${pr.rank} Lv.${pr.level}${pr.points ? ' ●' : ''}`;
+    if (e.plv.textContent !== lv) e.plv.textContent = lv;
+    e.xpFill.style.width = `${(pr.exp / pr.expNeeded) * 100}%`;
+    const gold = `${pr.gold} 兩`;
+    if (e.gold.textContent !== gold) e.gold.textContent = gold;
+    for (const id of ['potion', 'pill']) e[id].forEach(el => { el.textContent = pr.items[id] ?? 0; });
+    if (this.levelTimer > 0 && (this.levelTimer -= dt) <= 0) e.levelCall.classList.remove('show');
 
     const areaKey = getAreaKey(player.pos.x, player.pos.z);
-    if (areaKey !== this.currentArea) {
+    if (areaKey !== this.currentArea && this.levelTimer <= 0) {
       this.currentArea = areaKey;
       const area = THEME.areas[areaKey];
       e.areaLabel.textContent = area.name;
@@ -111,8 +142,8 @@ export class HUD {
         }
         const hint = document.createElement('div');
         hint.className = 'hint';
-        hint.textContent = JUTSU.filter(j => j.seals.join(',').startsWith(key))
-          .map(j => `${j.seals.map(s => THEME.seals[s]).join('→')} ${THEME.jutsu[j.key]}`).join('　');
+        hint.textContent = JUTSU.filter(j => this.prog.knows(j.key) && j.seals.join(',').startsWith(key))
+          .map(j => `${j.seals.map(s => THEME.seals[s]).join('→')} ${jutsuName(j)}`).join('　');
         e.sealBar.append(seq, hint);
       }
     }

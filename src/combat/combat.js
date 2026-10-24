@@ -95,8 +95,13 @@ class Clone {
 }
 
 export class Combat {
-  constructor({ scene, world, effects, player, camCtl, floatText, hud }) {
-    Object.assign(this, { scene, world, effects, player, camCtl, floatText, hud });
+  constructor({ scene, world, effects, player, camCtl, floatText, hud, progress }) {
+    Object.assign(this, { scene, world, effects, player, camCtl, floatText, hud, progress });
+    this.timers = [];
+    this.props = [];
+    this.spikeGeo = new THREE.ConeGeometry(0.45, 1.6, 5).translate(0, 0.6, 0);
+    this.rockMat = toonMaterial({ color: 0x8a7458 });
+    this.boltGeo = new THREE.CylinderGeometry(0.25, 0.4, 40, 6);
     this.enemies = new EnemyManager(scene, world);
     this.projectiles = new Projectiles(this);
     this.pc = new PlayerCombat(this);
@@ -151,8 +156,19 @@ export class Combat {
     return dt;
   }
 
-  hitEnemy(e, dmg, from, kb = 2) {
-    const result = e.takeHit(dmg, from, kb, this);
+  // 依遊戲時間延遲執行（暫停、命中停頓時也會跟著停）
+  schedule(delay, fn) {
+    this.timers.push({ at: this.time + delay, fn });
+  }
+
+  // 短暫存在的特效物件：update(prop, dt) 回傳 false 時移除
+  addProp(mesh, life, update) {
+    this.scene.add(mesh);
+    this.props.push({ mesh, t: 0, life, update });
+  }
+
+  hitEnemy(e, dmg, from, kb = 2, opts = {}) {
+    const result = e.takeHit(dmg, from, kb, this, opts);
     if (result) {
       this.recent = e;
       this.recentTimer = 4;
@@ -171,6 +187,7 @@ export class Combat {
   hitPlayer(dmg, from) {
     const p = this.player;
     if (p.dead || p.invuln > 0) return;
+    dmg = Math.max(1, Math.round(dmg * p.defMul)); // 防具減傷
     p.hp = Math.max(0, p.hp - dmg);
     p.hurtTime = 0.3;
     p.invuln = 0.35;
@@ -190,23 +207,99 @@ export class Combat {
     }
   }
 
-  explode(pos, radius, dmg, owner) {
-    this.effects.smoke(pos, 18, 0xff8a3a, 0.8, 2.5);
-    this.effects.smoke(pos, 8, 0x4a4a4a, 0.7, 1.5);
-    this.effects.ring(new THREE.Vector3(pos.x, Math.max(pos.y - 0.5, getTerrainHeight(pos.x, pos.z) + 0.1), pos.z), 0xffa040, radius, 0.5);
+  explode(pos, radius, dmg, owner, kind = 'fire') {
+    const ground = new THREE.Vector3(pos.x, Math.max(pos.y - 0.5, getTerrainHeight(pos.x, pos.z) + 0.1), pos.z);
+    if (kind === 'water') {
+      this.effects.smoke(pos, 16, 0xbfe6ff, 0.6, 2.5);
+      this.effects.ring(ground, 0x5ab8ff, radius, 0.5);
+    } else {
+      this.effects.smoke(pos, 18, 0xff8a3a, 0.8, 2.5);
+      this.effects.smoke(pos, 8, 0x4a4a4a, 0.7, 1.5);
+      this.effects.ring(ground, 0xffa040, radius, 0.5);
+    }
     this.camCtl.shake = 0.35;
     if (owner !== 'player') return;
     for (const e of this.enemies.list) {
       if (!e.alive) continue;
       const d = e.pos.distanceTo(pos);
-      if (d < radius + e.def.radius) this.hitEnemy(e, Math.round(dmg * (1 - (d / (radius + 1)) * 0.5)), pos, 8);
+      if (d < radius + e.def.radius) this.hitEnemy(e, Math.round(dmg * (1 - (d / (radius + 1)) * 0.5)), pos, kind === 'water' ? 10 : 8);
     }
   }
 
-  gainExp(n, pos) {
-    if (!n) return;
-    this.player.exp += n;
-    this.floatText.spawn(`+${n} EXP`, pos, 'exp');
+  // 自身周圍範圍招式的特效
+  burstFx(pos, radius, kind) {
+    const color = { wind: 0xd8fff4, earth: 0x9a7a52 }[kind] ?? 0xffffff;
+    const ground = new THREE.Vector3(pos.x, pos.y + 0.1, pos.z);
+    this.effects.ring(ground, color, radius, 0.6);
+    this.effects.ring(ground, color, radius * 0.6, 0.45);
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      this.effects.smoke(new THREE.Vector3(pos.x + Math.cos(a) * radius * 0.7, pos.y + 0.5, pos.z + Math.sin(a) * radius * 0.7), 1, color, 0.6, 1.5);
+    }
+    if (kind === 'earth') {
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2 + Math.random() * 0.3;
+        const r = radius * (0.45 + Math.random() * 0.45);
+        this.rockSpike(new THREE.Vector3(pos.x + Math.cos(a) * r, 0, pos.z + Math.sin(a) * r), 0.7 + Math.random() * 0.6);
+      }
+    }
+    this.camCtl.shake = 0.45;
+  }
+
+  // 岩槍：從地面刺出再縮回
+  rockSpike(at, size) {
+    at.y = getTerrainHeight(at.x, at.z);
+    const mesh = new THREE.Mesh(this.spikeGeo, this.rockMat);
+    mesh.position.copy(at);
+    mesh.rotation.set((Math.random() - 0.5) * 0.4, Math.random() * 6, (Math.random() - 0.5) * 0.4);
+    mesh.castShadow = true;
+    this.addProp(mesh, 1.3, (pr) => {
+      const t = pr.t;
+      const grow = t < 0.12 ? t / 0.12 : t > 0.9 ? Math.max(0, 1 - (t - 0.9) / 0.4) : 1;
+      mesh.scale.set(size, size * 1.8 * grow, size);
+    });
+  }
+
+  // 指定地點招式：warn 預告圈、hit 命中特效
+  strikeFx(point, kind, phase, radius) {
+    const ground = new THREE.Vector3(point.x, point.y + 0.15, point.z);
+    if (phase === 'warn') {
+      this.effects.ring(ground, kind === 'thunder' ? 0xfff2a0 : 0xc49a6a, radius, 0.4);
+      return;
+    }
+    if (kind === 'thunder') {
+      const bolt = new THREE.Mesh(this.boltGeo, new THREE.MeshBasicMaterial({
+        color: 0xfffbe0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      }));
+      bolt.position.set(point.x, point.y + 20, point.z);
+      this.addProp(bolt, 0.3, (pr) => {
+        bolt.material.opacity = Math.random() > 0.3 ? 1 - pr.t / 0.3 : 0.2; // 閃爍
+        bolt.scale.x = bolt.scale.z = 1 + Math.random();
+      });
+      this.effects.ring(ground, 0xfff2a0, radius, 0.5);
+      this.effects.smoke(ground, 14, 0xfff2a0, 0.4, 2);
+      this.effects.smoke(ground, 8, 0x555555, 0.6, 1.2);
+      this.camCtl.shake = 0.5;
+    } else {
+      for (let i = 0; i < 7; i++) {
+        const a = Math.random() * Math.PI * 2, r = Math.random() * radius * 0.8;
+        this.rockSpike(new THREE.Vector3(point.x + Math.cos(a) * r, 0, point.z + Math.sin(a) * r), 0.6 + Math.random() * 0.5);
+      }
+      this.effects.smoke(ground, 10, 0x9a7a52, 0.5, 1.5);
+      this.camCtl.shake = 0.3;
+    }
+  }
+
+  // 擊敗敵人：經驗值（等級差會打折）與金錢
+  onEnemyKilled(e) {
+    const d = e.def;
+    const top = new THREE.Vector3(e.pos.x, e.pos.y + d.height + 0.8, e.pos.z);
+    if (d.exp) this.floatText.spawn(`+${this.progress.gainExp(d.exp, d.level)} EXP`, top, 'exp');
+    if (d.gold) {
+      const g = d.gold[0] + Math.floor(Math.random() * (d.gold[1] - d.gold[0] + 1));
+      this.progress.addGold(g);
+      this.schedule(0.25, () => this.floatText.spawn(`+${g} 兩`, top, 'gold'));
+    }
   }
 
   spawnLog(pos) {
@@ -271,6 +364,23 @@ export class Combat {
     this.projectiles.update(dt);
     for (const cl of this.clones) cl.update(dt);
     this.clones = this.clones.filter(cl => !cl.dead);
+
+    for (let i = this.timers.length - 1; i >= 0; i--) {
+      if (this.time >= this.timers[i].at) {
+        const t = this.timers.splice(i, 1)[0];
+        t.fn();
+      }
+    }
+    for (let i = this.props.length - 1; i >= 0; i--) {
+      const pr = this.props[i];
+      pr.t += dt;
+      pr.update?.(pr, dt);
+      if (pr.t >= pr.life) {
+        this.scene.remove(pr.mesh);
+        if (pr.mesh.material !== this.rockMat) pr.mesh.material.dispose();
+        this.props.splice(i, 1);
+      }
+    }
 
     // 替身木頭：倒下、沉入地面
     for (let i = this.logs.length - 1; i >= 0; i--) {
