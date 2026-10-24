@@ -45,6 +45,7 @@ const fragmentShader = /* glsl */`
   uniform vec3 deep;
   uniform vec3 foam;
   uniform vec3 sunDir;
+  uniform vec3 tint;
   varying vec3 vW;
 
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -74,10 +75,11 @@ const fragmentShader = /* glsl */`
     // 太陽反射的波光
     vec3 V = normalize(cameraPosition - vW);
     float glint = step(0.93, vnoise(vW.xz * 2.2 + uTime * 0.7)) * smoothstep(0.75, 0.98, dot(reflect(-sunDir, vec3(0.0, 1.0, 0.0)), V));
-    col += glint * 1.5;
+    col += glint * 1.5 * step(0.0, sunDir.y);
 
     float fres = pow(1.0 - max(dot(V, vec3(0.0, 1.0, 0.0)), 0.0), 3.0);
     col = mix(col, vec3(0.8, 0.92, 1.0), fres * 0.35);
+    col *= tint; // 跟著日夜、天氣變暗
 
     float alpha = max(mix(0.72, 0.92, smoothstep(0.0, 0.4, depth)), edge * 0.95);
     gl_FragColor = vec4(col, alpha);
@@ -85,7 +87,8 @@ const fragmentShader = /* glsl */`
     #include <fog_fragment>
   }`;
 
-export function createWater(sunDir) {
+// sunDir、tint 直接引用天空的物件，天空更新時水面自動跟著變
+export function createWater(sunDir, tint) {
   const geo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, 160, 160);
   geo.rotateX(-Math.PI / 2);
   const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
@@ -93,11 +96,11 @@ export function createWater(sunDir) {
     shallow: { value: new THREE.Color(0x4fc7d9) },
     deep: { value: new THREE.Color(0x1d5fae) },
     foam: { value: new THREE.Color(0xf4fbff) },
-    sunDir: { value: new THREE.Vector3() },
   }]);
   uniforms.depthTex = { value: depthTexture() };
   uniforms.uTime = sharedTime;
-  uniforms.sunDir.value.copy(sunDir).normalize();
+  uniforms.sunDir = { value: sunDir };
+  uniforms.tint = { value: tint };
 
   const mesh = new THREE.Mesh(geo, new THREE.ShaderMaterial({
     uniforms, vertexShader, fragmentShader, transparent: true, fog: true,

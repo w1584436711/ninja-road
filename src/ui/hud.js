@@ -7,7 +7,7 @@ export class HUD {
     this.minimap = minimap;
     this.el = {
       hpFill: $('hpFill'), hpText: $('hpText'), ckFill: $('ckFill'), ckText: $('ckText'),
-      coords: $('coords'), areaLabel: $('areaLabel'), area: $('area'), toast: $('toast'),
+      coords: $('coords'), areaLabel: $('areaLabel'), area: $('area'), toast: $('toast'), clock: $('clock'),
     };
     // 同一技能可能同時有技能列格子與觸控按鈕
     this.slots = {};
@@ -25,8 +25,11 @@ export class HUD {
     this.toastTimer = 1.6;
   }
 
-  update(dt, player) {
+  update(dt, player, sky) {
     const e = this.el;
+    const icon = sky.weatherName === 'rain' ? '☂' : sky.weatherName === 'cloudy' ? '☁' : sky.isNight ? '☾' : '☀';
+    const clock = `${icon} ${sky.clockText()}　${sky.weather.label}`;
+    if (e.clock.textContent !== clock) e.clock.textContent = clock;
     e.hpFill.style.width = `${(player.hp / player.maxHp) * 100}%`;
     e.hpText.textContent = `HP ${Math.ceil(player.hp)} / ${player.maxHp}`;
     e.ckFill.style.width = `${(player.chakra / player.maxChakra) * 100}%`;

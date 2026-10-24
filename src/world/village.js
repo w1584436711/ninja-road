@@ -79,7 +79,9 @@ function createHouse(group, world, rng, x, z, w, d) {
   for (const off of [-1, 1]) {
     const wx = towardX ? fx : fx + off * (w / 4 + 0.6);
     const wz = towardX ? fz + off * (d / 4 + 0.6) : fz;
-    group.add(box(towardX ? 0.1 : 1.1, 0.9, towardX ? 1.1 : 0.1, 0x9fd2ee, wx, base + h * 0.62, wz, { roughness: 0.2 }));
+    const win = box(towardX ? 0.1 : 1.1, 0.9, towardX ? 1.1 : 0.1, 0x9fd2ee, wx, base + h * 0.62, wz, { roughness: 0.2 });
+    win.userData.glow = 'window'; // 夜裡亮燈
+    group.add(win);
   }
 }
 
@@ -93,7 +95,8 @@ function createTower(group, world) {
   body.castShadow = body.receiveShadow = true;
   group.add(body);
 
-  const band = new THREE.Mesh(new THREE.CylinderGeometry(r + 0.05, r + 0.05, 1.3, 32), mat(c.towerBand));
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(r + 0.05, r + 0.05, 1.3, 32), mat(c.towerBand, { emissive: 0x000000 }));
+  band.userData.glow = 'window';
   band.position.set(x, base + h * 0.6, z);
   group.add(band);
 
@@ -153,7 +156,9 @@ function createLanterns(group) {
       const z = i * 15, x = side * 5;
       const y = getTerrainHeight(x, z);
       group.add(box(0.2, 3, 0.2, 0x4a3324, x, y + 1.5, z));
-      group.add(box(0.6, 0.8, 0.6, 0xffb070, x, y + 3.2, z, { emissive: 0xff8a3a, emissiveIntensity: 2.5 }));
+      const lamp = box(0.6, 0.8, 0.6, 0xffb070, x, y + 3.2, z, { emissive: 0xff8a3a, emissiveIntensity: 2.5 });
+      lamp.userData.glow = 'lantern';
+      group.add(lamp);
     }
   }
 }

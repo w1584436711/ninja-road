@@ -5,7 +5,7 @@ import { createTerrain } from './world/terrain.js';
 import { createWater } from './world/water.js';
 import { Grass } from './world/grass.js';
 import { sharedTime } from './render/wind.js';
-import { createSky, HORIZON_COLOR } from './world/sky.js';
+import { Sky, HORIZON_COLOR } from './world/sky.js';
 import { createVillage } from './world/village.js';
 import { createNature } from './world/nature.js';
 import { Effects } from './fx/effects.js';
@@ -43,8 +43,8 @@ const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.3, 10
 // ---------- 世界 ----------
 const world = new CollisionWorld();
 scene.add(createTerrain());
-const sky = createSky(scene);
-scene.add(createWater(sky.sunDir));
+const sky = new Sky(scene, quality, sharedTime);
+scene.add(createWater(sky.sunDir, sky.waterTint));
 if (quality.shadows) sky.sun.shadow.mapSize.set(quality.shadowSize, quality.shadowSize);
 const village = createVillage(world);
 scene.add(village.group);
@@ -61,7 +61,15 @@ const touchControls = touch ? new TouchControls(input) : null;
 
 // 動畫風：全部轉賽璐璐材質，再由後製描邊
 toonify(scene);
+sky.refreshCloudMaterial();
+sky.collectGlow(scene);
 const post = new PostFX(renderer, scene, camera, quality);
+
+// 點右上角時鐘：快轉一小時（方便看晚上、測試）
+document.getElementById('clock').addEventListener('pointerdown', e => {
+  e.stopPropagation();
+  sky.advanceHours(1);
+});
 const grass = new Grass(scene, world, quality); // 草在 toonify 之後建立，本身已是賽璐璐材質
 
 // ---------- 畫質選擇 ----------
@@ -137,11 +145,11 @@ function frame() {
   grass.update(player.pos);
   camCtl.update(dt, player.pos);
   sky.update(dt, player.pos, camera.position);
-  if (playing) hud.update(dt, player);
+  if (playing) hud.update(dt, player, sky);
   input.endFrame();
   post.render();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
-window.game = { scene, player, camCtl, world, renderer, input, hud, post, quality, grass, sharedTime };
+window.game = { scene, player, camCtl, world, renderer, input, hud, post, quality, grass, sharedTime, sky };
