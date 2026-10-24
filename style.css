@@ -223,6 +223,54 @@ body.touch #clock { font-size: 10px; }
 .irow.equipped { outline: 1px solid #ffd27a; }
 .slot-tag { margin-left: 8px; font-size: 11px; color: #99a; }
 
+/* ---------- 任務 ---------- */
+#questTracker { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; max-width: 220px; margin-left: auto; }
+.qt {
+  padding: 4px 8px; text-align: right; font-size: 11px; line-height: 1.4;
+  background: rgba(15, 20, 35, .6); border-radius: 6px; border-right: 3px solid #c9a6ff;
+}
+.qt b { display: block; font-size: 12px; color: #e9dcff; }
+.qt span { color: #dde; }
+.qt.done { border-right-color: #9fe39a; }
+.qt.done span { color: #9fe39a; }
+body.touch #questTracker {
+  position: fixed; max-width: 190px; margin: 0; align-items: flex-start;
+  top: calc(86px + env(safe-area-inset-top)); left: calc(8px + env(safe-area-inset-left));
+}
+body.touch .qt { font-size: 9px; padding: 3px 6px; text-align: left; border-right: none; border-left: 3px solid #c9a6ff; }
+body.touch .qt.done { border-left-color: #9fe39a; }
+body.touch .qt b { font-size: 10px; }
+
+.qcard {
+  display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; min-width: 0;
+  background: rgba(42, 53, 80, .45); border-radius: 8px;
+}
+.qrank {
+  display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 4px; border-radius: 50%;
+  font-size: 12px; font-weight: 900; color: #111;
+}
+.rD { background: #9fe39a; } .rC { background: #8fd3ff; } .rB { background: #ffb347; } .rA { background: #ff6a5a; }
+.qgoal { font-size: 12px; color: #ffd27a; }
+.qreward { font-size: 12px; color: #9fe39a; }
+.mbtn.ghost { color: #ccd; background: #2a3550; font-weight: 400; }
+#targetFrame.boss #targetName { color: #ffd23a; font-size: 16px; }
+#targetFrame.boss .bar { height: 16px; border-color: #ffd23a; }
+
+/* ---------- 對話框 ---------- */
+#dialogue {
+  position: fixed; z-index: 11; left: 50%; transform: translateX(-50%);
+  bottom: calc(24px + env(safe-area-inset-bottom)); width: min(680px, calc(100% - 32px));
+  padding: 14px 18px 12px; cursor: pointer;
+  background: rgba(18, 23, 38, .95); border: 2px solid #ffd27a; border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .5);
+}
+#dlgName { font-size: 15px; font-weight: 900; color: #ffb347; margin-bottom: 6px; }
+#dlgText { font-size: 16px; line-height: 1.7; color: #f2f2f6; min-height: 3.4em; }
+#dlgOpts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+.dlg-next { font-size: 12px; color: #99a; animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: .3; } }
+body.touch #dlgText { font-size: 14px; min-height: 2.6em; }
+
 /* 手機：道具、互動、選單按鈕 */
 #titems {
   position: absolute; display: flex; gap: 8px;

@@ -218,6 +218,12 @@ export class Combat {
       this.effects.ring(ground, 0xffa040, radius, 0.5);
     }
     this.camCtl.shake = 0.35;
+    if (owner === 'enemy') {
+      for (const t of [...this.targets]) {
+        if (t.pos.distanceTo(pos) < radius + 0.4) this.hitTarget(t, dmg, pos);
+      }
+      return;
+    }
     if (owner !== 'player') return;
     for (const e of this.enemies.list) {
       if (!e.alive) continue;
@@ -293,6 +299,11 @@ export class Combat {
   // 擊敗敵人：經驗值（等級差會打折）與金錢
   onEnemyKilled(e) {
     const d = e.def;
+    this.quests?.event({ type: 'kill', target: e.key });
+    if (d.boss) {
+      this.hud.jutsuCall(`擊敗${THEME.enemies[e.key]}！`);
+      this.camCtl.shake = 0.5;
+    }
     const top = new THREE.Vector3(e.pos.x, e.pos.y + d.height + 0.8, e.pos.z);
     if (d.exp) this.floatText.spawn(`+${this.progress.gainExp(d.exp, d.level)} EXP`, top, 'exp');
     if (d.gold) {
@@ -397,7 +408,7 @@ export class Combat {
     // 鎖定標記
     const lock = this.pc.lock;
     this.marker.visible = !!lock;
-    if (lock) this.marker.position.set(lock.pos.x, lock.pos.y + lock.def.height + 1.25 + Math.sin(this.time * 5) * 0.08, lock.pos.z);
+    if (lock) this.marker.position.set(lock.pos.x, lock.pos.y + lock.def.height + 1.4 + Math.sin(this.time * 5) * 0.08, lock.pos.z);
     if (lock) {
       this.recent = lock;
       this.recentTimer = 1;
@@ -413,6 +424,6 @@ export class Combat {
   get targetInfo() {
     const e = this.recentTimer > 0 ? this.recent : null;
     if (!e || !e.alive) return null;
-    return { name: `${THEME.enemies[e.key]}${e.def.dummy ? '' : ` Lv.${e.def.level}`}`, frac: Math.max(0, e.hp / e.def.hp) };
+    return { name: e.name, frac: Math.max(0, e.hp / e.def.hp), boss: !!e.def.boss };
   }
 }

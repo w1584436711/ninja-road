@@ -28,7 +28,7 @@ export class Villagers {
       model.root.add(tag);
       scene.add(model.root);
       const pos = this.randomPoint();
-      this.list.push({ model, pos, target: this.randomPoint(), facing: 0, wait: 0, timer: 0, phase: 0, time: Math.random() * 10, speed: 1.8 + this.rng() * 1.2 });
+      this.list.push({ name: THEME.npcs[type.role], model, pos, target: this.randomPoint(), facing: 0, wait: 0, timer: 0, phase: 0, time: Math.random() * 10, speed: 1.8 + this.rng() * 1.2 });
     }
   }
 

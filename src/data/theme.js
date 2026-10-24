@@ -27,7 +27,10 @@ export const THEME = {
   signs: { tower: '風', gate: '風鈴', shop: '鈴屋', toolshop: '忍具' },
   colors: { tower: 0x2f6f8f, towerRoof: 0x1d4560, towerBand: 0x22303a, gate: 0xc0392b, gateBeam: 0x2a2626 },
 
-  npcs: { villager: '風鈴村民', chunin: '風鈴中忍', student: '忍術學堂學生', shopOwner: '鈴屋老闆' },
+  npcs: {
+    villager: '風鈴村民', chunin: '風鈴中忍', student: '忍術學堂學生', shopOwner: '鈴屋老闆',
+    leader: '天守大人', traveler: '旅人',
+  },
 
   skills: {
     jump: '二段跳', dash: '迅影步', dashShort: '迅', charge: '聚集查克拉',
@@ -52,7 +55,7 @@ export const THEME = {
   seals: ['寅', '巳', '未', '辰'],
   natures: { fire: '火', wind: '風', lightning: '雷', water: '水', earth: '土' },
 
-  enemies: { wolf: '野狼', bandit: '山賊', rogue: '流浪忍者', dummy: '訓練木樁' },
+  enemies: { wolf: '野狼', bandit: '山賊', rogue: '流浪忍者', dummy: '訓練木樁', wolfking: '狼王', crow: '黑鴉' },
 };
 
 function merge(target, src) {

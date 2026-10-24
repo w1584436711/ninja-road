@@ -25,6 +25,7 @@ function defaults() {
     natures: [], known: ['clone'], mastery: {},
     gold: 50, items: { potion: 2, pill: 1 }, owned: [],
     equip: { weapon: null, armor: null, accessory: null },
+    quests: { active: {}, done: [] }, flags: {},
     pos: null, hour: null,
   };
 }

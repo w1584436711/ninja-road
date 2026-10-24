@@ -235,6 +235,29 @@ function createPowerLines(group) {
   }
 }
 
+// 首領塔前的任務板（面向 +Z）
+export const QUEST_BOARD = { x: -7, z: -68 };
+
+function createQuestBoard(group, world) {
+  const { x, z } = QUEST_BOARD;
+  const base = getTerrainHeight(x, z);
+  for (const sx of [-1.4, 1.4]) group.add(box(0.2, 2.6, 0.2, 0x5e4630, x + sx, base + 1.3, z));
+  group.add(box(3.0, 1.7, 0.12, 0x9c7a50, x, base + 1.65, z + 0.08));
+  const roof = box(3.6, 0.15, 0.8, 0x7a4f2e, x, base + 2.65, z + 0.1);
+  roof.rotation.x = -0.25;
+  group.add(roof);
+  // 釘在板上的委託單
+  const paper = new THREE.MeshStandardMaterial({ color: 0xf4efe4 });
+  const notes = [[-0.9, 0.3], [-0.1, 0.4], [0.75, 0.25], [-0.6, -0.4], [0.3, -0.35], [1.0, -0.45]];
+  for (const [nx, ny] of notes) {
+    const n = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.65), paper);
+    n.position.set(x + nx, base + 1.65 + ny, z + 0.15);
+    n.rotation.z = (nx * 7 % 1 - 0.5) * 0.2;
+    group.add(n);
+  }
+  world.addBox(x, z, 3.2, 0.5, base + 2.7);
+}
+
 // 廣場旁的兩個攤位：拉麵攤（吃了回滿）與忍具店（買道具、裝備）。key 對應 main.js 的互動
 export const STALLS = [
   { key: 'ramen', x: -12, z: 20, w: 7, d: 4, roof: 0xc0462f, fg: '#b3261e' },
@@ -307,6 +330,7 @@ export function createVillage(world) {
   createLanterns(group);
   createFence(group, world);
   createPowerLines(group);
+  createQuestBoard(group, world);
   for (const s of STALLS) {
     createStall(group, world, s);
     houses.push({ x: s.x, z: s.z, w: s.w, d: s.d + 1 });

@@ -150,6 +150,12 @@ export function createCharacter(opts = {}) {
     head.add(cap);
   }
 
+  // 斗笠（村長、旅人）
+  if (o.hat) {
+    const hat = mesh(new THREE.ConeGeometry(0.52, 0.28, 18), o.hat, 0, 0.3, 0);
+    head.add(hat);
+  }
+
   if (o.band) {
     const bandMat = new THREE.MeshStandardMaterial({ color: 0x23408e, side: THREE.DoubleSide });
     head.add(mesh(new THREE.CylinderGeometry(0.262, 0.262, 0.075, 28, 1, true), bandMat, 0, 0.1, 0));

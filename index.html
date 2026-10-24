@@ -38,6 +38,7 @@
       <div id="areaLabel"></div>
       <button id="clock" title="點一下快轉 1 小時"></button>
       <div id="coords"></div>
+      <div id="questTracker"></div>
     </div>
 
     <div id="area"></div>
@@ -80,6 +81,13 @@
     </div>
   </div>
 
+  <!-- 對話框 -->
+  <div id="dialogue" class="hidden" role="dialog" aria-labelledby="dlgName">
+    <div id="dlgName"></div>
+    <div id="dlgText"></div>
+    <div id="dlgOpts"></div>
+  </div>
+
   <!-- 角色選單／商店 -->
   <div id="menu" class="hidden">
     <div class="menu-panel" role="dialog" aria-labelledby="menuTitle">
@@ -90,6 +98,7 @@
       <div id="menuTabs">
         <button data-tab="status">能力</button>
         <button data-tab="jutsu">忍術</button>
+        <button data-tab="quests">任務</button>
         <button data-tab="items">道具</button>
         <button data-tab="system">系統</button>
       </div>

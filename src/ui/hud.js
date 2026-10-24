@@ -12,7 +12,7 @@ export class HUD {
       coords: $('coords'), areaLabel: $('areaLabel'), area: $('area'), toast: $('toast'), clock: $('clock'),
       targetFrame: $('targetFrame'), targetName: $('targetName'), targetFill: $('targetFill'),
       sealBar: $('sealBar'), jutsuCall: $('jutsuCall'), hurtFlash: $('hurtFlash'), death: $('death'),
-      plv: $('plv'), xpFill: $('xpFill'), gold: $('gold'), levelCall: $('levelCall'),
+      plv: $('plv'), xpFill: $('xpFill'), gold: $('gold'), levelCall: $('levelCall'), tracker: $('questTracker'),
       potion: document.querySelectorAll('[data-count="potion"]'), pill: document.querySelectorAll('[data-count="pill"]'),
     };
     this.levelTimer = 0;
@@ -122,6 +122,7 @@ export class HUD {
     const pc = combat.pc;
     const info = combat.targetInfo;
     e.targetFrame.classList.toggle('hidden', !info);
+    e.targetFrame.classList.toggle('boss', !!info?.boss);
     if (info) {
       if (e.targetName.textContent !== info.name) e.targetName.textContent = info.name;
       e.targetFill.style.width = `${info.frac * 100}%`;
@@ -157,6 +158,23 @@ export class HUD {
     set('sub', 'off', player.chakra < 20 || pc.subCd > 0);
     set('lock', 'active', !!pc.lock);
     set('attack', 'active', !!pc.action && pc.action.combo !== undefined);
+
+    // 任務追蹤
+    const lines = this.quests?.trackerLines() ?? [];
+    const key2 = lines.map(l => l.title + l.text).join('|');
+    if (key2 !== this.trackerKey) {
+      this.trackerKey = key2;
+      e.tracker.replaceChildren(...lines.map(l => {
+        const row = document.createElement('div');
+        row.className = l.done ? 'qt done' : 'qt';
+        const t = document.createElement('b');
+        t.textContent = l.title;
+        const s = document.createElement('span');
+        s.textContent = l.text;
+        row.append(t, s);
+        return row;
+      }));
+    }
 
     this.minimap.draw(player, combat);
   }

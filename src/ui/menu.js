@@ -2,6 +2,7 @@ import { THEME } from '../data/theme.js';
 import { STATS, FIRST_NATURE_LEVEL, SECOND_NATURE_LEVEL } from '../progress/progression.js';
 import { ITEMS, SHOP_STOCK, SLOT_NAMES } from '../progress/items.js';
 import { JUTSU, jutsuName, sealText, NATURE_COLORS, NATURE_DESC } from '../combat/jutsu.js';
+import { QUESTS, goalText, rewardText } from '../quests/quests.js';
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
@@ -49,6 +50,13 @@ export class Menu {
     this.show(tab);
   }
 
+  openBoard() {
+    this.mode = 'board';
+    this.root.classList.remove('hidden');
+    this.tabsEl.classList.add('hidden');
+    this.render();
+  }
+
   openShop() {
     this.mode = 'shop';
     this.root.classList.remove('hidden');
@@ -81,6 +89,9 @@ export class Menu {
       case 'buy':
         if (p.buy(arg)) this.hud.toast(`買了${ITEMS[arg].name}`);
         break;
+      case 'accept': this.quests.accept(arg); break;
+      case 'turnin': this.quests.turnIn(arg); break;
+      case 'abandon': this.quests.abandon(arg); break;
       case 'wipe':
         if (!this.wipeArmed) {
           this.wipeArmed = true;
@@ -102,8 +113,64 @@ export class Menu {
       this.body.innerHTML = this.shopHtml();
       return;
     }
+    if (this.mode === 'board') {
+      this.title.textContent = '任務板';
+      this.body.innerHTML = this.boardHtml();
+      return;
+    }
     this.title.textContent = `${THEME.player.name}　${this.prog.rank} Lv.${this.prog.level}`;
-    this.body.innerHTML = { status: this.statusHtml, jutsu: this.jutsuHtml, items: this.itemsHtml, system: this.systemHtml }[this.tab].call(this);
+    this.body.innerHTML = {
+      status: this.statusHtml, jutsu: this.jutsuHtml, quests: this.questsHtml, items: this.itemsHtml, system: this.systemHtml,
+    }[this.tab].call(this);
+  }
+
+  questCard(q, button) {
+    const ql = this.quests;
+    const prog = ql.state.active[q.id];
+    const goals = q.goals.map((g, i) => goalText(g, prog ? prog[i] : 0)).join('　');
+    return `
+      <div class="qcard">
+        <div class="jtop"><span class="qrank r${q.rank}">${q.rank}</span><b>${esc(q.title)}</b><span class="jlv">Lv.${q.level}${q.repeatable ? '・可重複' : ''}</span></div>
+        <div class="jdesc">${esc(q.desc)}</div>
+        <div class="qgoal">${esc(goals)}</div>
+        <div class="qreward">報酬：${esc(rewardText(q.reward))}</div>
+        <div class="jact">${button}</div>
+      </div>`;
+  }
+
+  boardHtml() {
+    const ql = this.quests;
+    const groups = { complete: [], active: [], available: [], locked: [] };
+    for (const q of QUESTS) {
+      const st = ql.status(q.id);
+      if (st === 'done') continue;
+      if (st === 'complete') {
+        groups.complete.push(this.questCard(q, q.leaderOnly
+          ? `<button class="mbtn" disabled>向${THEME.npcs.leader}回報</button>`
+          : `<button class="mbtn" data-act="turnin" data-arg="${q.id}">回報，領取報酬</button>`));
+      } else if (st === 'active') {
+        groups.active.push(this.questCard(q, `<button class="mbtn ghost" data-act="abandon" data-arg="${q.id}">放棄</button>`));
+      } else if (st === 'available' && !q.leaderOnly) {
+        groups.available.push(this.questCard(q, `<button class="mbtn" data-act="accept" data-arg="${q.id}">接下任務</button>`));
+      } else {
+        const why = st === 'available' ? `向${THEME.npcs.leader}詢問` : st;
+        groups.locked.push(this.questCard(q, `<button class="mbtn" disabled>${esc(why)}</button>`));
+      }
+    }
+    const sec = (title, list) => (list.length ? `<div class="mhead">${title}</div><div class="jgrid">${list.join('')}</div>` : '');
+    const doneCount = ql.state.done.length;
+    return `
+      <p class="mnote">一次最多進行 3 個任務。完成目標後回到這裡回報。已完成 ${doneCount} 個任務。</p>
+      ${sec('可以回報', groups.complete)}${sec('進行中', groups.active)}${sec('可以接', groups.available)}${sec('尚未開放', groups.locked)}`;
+  }
+
+  questsHtml() {
+    const ql = this.quests;
+    const active = QUESTS.filter(q => ql.isActive(q.id)).map(q => this.questCard(q,
+      ql.isComplete(q.id) ? '<span class="mastery">目標達成，回去回報</span>' : `<button class="mbtn ghost" data-act="abandon" data-arg="${q.id}">放棄</button>`));
+    return active.length
+      ? `<div class="jgrid">${active.join('')}</div>`
+      : '<p class="mnote">目前沒有進行中的任務。到首領塔前的任務板接任務吧。</p>';
   }
 
   statusHtml() {

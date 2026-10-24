@@ -56,10 +56,13 @@ export class Minimap {
       const x = W / 2 + (e.pos.x - player.pos.x) * k, y = H / 2 + (e.pos.z - player.pos.z) * k;
       if (x < 0 || y < 0 || x > W || y > H) continue;
       const chasing = e.state !== 'patrol' && e.state !== 'return';
-      ctx.fillStyle = chasing ? '#ff3a2a' : '#e8806a';
+      ctx.fillStyle = e.def.boss ? '#ffd23a' : chasing ? '#ff3a2a' : '#e8806a';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(x, y, chasing ? 3.5 : 2.5, 0, Math.PI * 2);
+      ctx.arc(x, y, e.def.boss ? 5.5 : chasing ? 3.5 : 2.5, 0, Math.PI * 2);
       ctx.fill();
+      if (e.def.boss) ctx.stroke();
     }
 
     // 玩家箭頭（地圖北方朝上，-Z 為北）

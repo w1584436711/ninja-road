@@ -24,8 +24,11 @@ import { FloatText } from './ui/floatText.js';
 import { Progression } from './progress/progression.js';
 import { RAMEN_PRICE } from './progress/items.js';
 import { Menu } from './ui/menu.js';
-import { STALLS } from './world/village.js';
-import { getTerrainHeight } from './world/terrain.js';
+import { STALLS, QUEST_BOARD } from './world/village.js';
+import { getTerrainHeight, getAreaKey } from './world/terrain.js';
+import { QuestLog } from './quests/quests.js';
+import { TownNpcs, TIPS, leaderScript, travelerScript } from './npc/townNpcs.js';
+import { Dialogue } from './ui/dialogue.js';
 import { THEME } from './data/theme.js';
 
 // 世界觀設定要在建立任何物件前載入（本機可用 theme.local.js 覆蓋）
@@ -103,20 +106,35 @@ progress.onLevelUp = (level, newRank, canPickNature) => {
   for (let i = 0; i < 20; i++) effects.spark(new THREE.Vector3(player.pos.x + (Math.random() - 0.5) * 1.6, player.pos.y + Math.random() * 0.5, player.pos.z + (Math.random() - 0.5) * 1.6), 0xffe08a);
 };
 
-// ---------- 選單、商店、拉麵攤 ----------
+// ---------- 任務 ----------
+const quests = new QuestLog(progress);
+quests.onNotice = msg => hud.toast(msg);
+combat.quests = quests;
+hud.quests = quests;
+const townNpcs = new TownNpcs(scene);
+
+// ---------- 選單、對話（開啟時遊戲暫停、放開滑鼠） ----------
 const menu = new Menu(progress, player, hud);
-function openMenu(kind = 'menu') {
-  if (!playing || menu.isOpen) return;
-  if (kind === 'shop') menu.openShop();
-  else menu.open();
+menu.quests = quests;
+const dialogue = new Dialogue();
+const uiOpen = () => menu.isOpen || dialogue.isOpen;
+
+function openUi(show) {
+  if (!playing || uiOpen()) return;
+  show();
   if (!touch) document.exitPointerLock?.();
 }
-menu.onClose = () => {
+function onUiClosed() {
+  input.endFrame(); // 關閉用的按鍵不要再觸發遊戲動作
   hud.refreshJutsu();
-  if (!touch && playing) {
+  if (!touch && playing && !uiOpen()) {
     try { canvas.requestPointerLock?.()?.catch?.(() => {}); } catch { /* 忽略 */ }
   }
-};
+}
+menu.onClose = onUiClosed;
+dialogue.onClose = onUiClosed;
+const openMenu = () => openUi(() => menu.open());
+
 for (const id of ['menuBtn', 'menuBtn2']) {
   document.getElementById(id).addEventListener('pointerdown', e => {
     e.stopPropagation();
@@ -124,24 +142,74 @@ for (const id of ['menuBtn', 'menuBtn2']) {
   });
 }
 
+function talk(npcKey) {
+  if (npcKey === 'leader') {
+    const s = leaderScript(quests, progress);
+    const options = s.offer ? [
+      { label: '交給我吧！', fn: () => quests.accept(s.offer) },
+      { label: '我再準備一下', fn: () => {} },
+    ] : [];
+    openUi(() => dialogue.open(THEME.npcs.leader, s.pages, options));
+    if (s.turnIn) quests.turnIn(s.turnIn);
+  } else if (npcKey === 'traveler') {
+    const s = travelerScript(quests);
+    openUi(() => dialogue.open(THEME.npcs.traveler, s.pages));
+    if (s.talk) quests.event({ type: 'talk', npc: s.talk });
+  }
+  progress.save();
+}
+
+// 有新消息的 NPC 頭上會出現「！」
+function hasNews(key) {
+  if (key === 'leader') {
+    const st = quests.status('crow');
+    return !progress.flags.metLeader || st === 'available' || st === 'complete';
+  }
+  if (key === 'traveler') return quests.isActive('delivery') && !quests.isComplete('delivery');
+  return false;
+}
+
+// ---------- 互動：攤位、任務板、NPC、村民 ----------
 const interactEl = document.getElementById('interact');
 const interactBtn = document.getElementById('tbInteract');
-let nearStall = null;
+let near = null;
+function interactables() {
+  const list = [
+    ...STALLS.map(s => ({
+      x: s.x, z: s.z + 3.2, r: 3.2, btn: s.key === 'shop' ? '店' : '麵',
+      label: s.key === 'shop' ? `打開${THEME.signs.toolshop}店` : `吃拉麵（${RAMEN_PRICE} 兩，HP・查克拉全滿）`,
+      act: () => (s.key === 'shop' ? openUi(() => menu.openShop()) : eatRamen()),
+    })),
+    { x: QUEST_BOARD.x, z: QUEST_BOARD.z + 1.8, r: 2.8, btn: '任', label: '查看任務板', act: () => openUi(() => menu.openBoard()) },
+    ...townNpcs.list.map(n => ({ x: n.pos.x, z: n.pos.z, r: 2.6, btn: '談', label: `和${n.name}說話`, act: () => talk(n.key) })),
+    ...villagers.list.map(v => ({
+      x: v.pos.x, z: v.pos.z, r: 2.2, btn: '談', label: `和${v.name}說話`,
+      act: () => openUi(() => dialogue.open(v.name, [TIPS[Math.floor(Math.random() * TIPS.length)]])),
+    })),
+  ];
+  return list;
+}
 function updateInteract() {
-  nearStall = STALLS.find(s => Math.hypot(player.pos.x - s.x, player.pos.z - (s.z + 3.2)) < 3.2) ?? null;
-  const label = !nearStall ? '' : nearStall.key === 'shop'
-    ? `${touch ? '點「店」' : '按 G'} 打開${THEME.signs.toolshop}店`
-    : `${touch ? '點「麵」' : '按 G'} 吃拉麵（${RAMEN_PRICE} 兩，HP・查克拉全滿）`;
-  interactEl.classList.toggle('hidden', !nearStall);
+  near = null;
+  let best = Infinity;
+  for (const it of interactables()) {
+    const d = Math.hypot(player.pos.x - it.x, player.pos.z - it.z);
+    if (d < it.r && d < best) {
+      near = it;
+      best = d;
+    }
+  }
+  const label = near ? `${touch ? `點「${near.btn}」` : '按 G'} ${near.label}` : '';
+  interactEl.classList.toggle('hidden', !near);
   if (interactEl.textContent !== label) interactEl.textContent = label;
-  interactBtn.hidden = !nearStall;
-  if (nearStall) interactBtn.textContent = nearStall.key === 'shop' ? '店' : '麵';
+  interactBtn.hidden = !near;
+  if (near) interactBtn.textContent = near.btn;
 }
 function interact() {
-  if (!nearStall) return;
-  if (nearStall.key === 'shop') {
-    openMenu('shop');
-  } else if (progress.pay(RAMEN_PRICE)) {
+  near?.act();
+}
+function eatRamen() {
+  if (progress.pay(RAMEN_PRICE)) {
     player.hp = player.maxHp;
     player.chakra = player.maxChakra;
     hud.toast('好吃！HP、查克拉全滿');
@@ -150,6 +218,7 @@ function interact() {
   }
 }
 let saveTimer = 15;
+let lastArea = null;
 
 // ---------- 畫質選擇 ----------
 const qualityRow = document.getElementById('quality');
@@ -195,7 +264,7 @@ startBtn.addEventListener('click', () => {
 });
 document.getElementById('pauseBtn').addEventListener('click', pause);
 document.addEventListener('pointerlockchange', () => {
-  if (document.pointerLockElement !== canvas && playing && !touch && !menu.isOpen) pause();
+  if (document.pointerLockElement !== canvas && playing && !touch && !uiOpen()) pause();
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && playing) pause();
@@ -212,7 +281,7 @@ addEventListener('resize', () => {
 const clock = new THREE.Clock();
 function frame() {
   const realDt = Math.min(clock.getDelta(), 0.05);
-  const active = playing && !menu.isOpen; // 選單開著時遊戲暫停
+  const active = playing && !uiOpen(); // 選單、對話開著時遊戲暫停
   const dt = active ? combat.timeScale(realDt) : playing ? 0 : realDt; // 命中停頓時放慢
   sharedTime.value += dt;
   if (active) {
@@ -226,6 +295,11 @@ function frame() {
     player.update(dt, input, camCtl.yaw);
     combat.update(dt);
     updateInteract();
+    const area = getAreaKey(player.pos.x, player.pos.z);
+    if (area !== lastArea) {
+      lastArea = area;
+      quests.event({ type: 'visit', area });
+    }
     if ((saveTimer -= realDt) <= 0) {
       progress.save(sky.hour);
       saveTimer = 15;
@@ -234,6 +308,7 @@ function frame() {
     camCtl.yaw += dt * 0.08; // 開始畫面時鏡頭緩慢環繞
   }
   villagers.update(dt);
+  townNpcs.update(dt, player, hasNews);
   effects.update(dt);
   floatText.update(active ? realDt : 0);
   grass.update(player.pos);
@@ -246,7 +321,7 @@ function frame() {
 }
 requestAnimationFrame(frame);
 
-window.game = { scene, player, camCtl, world, renderer, input, hud, post, quality, grass, sharedTime, sky, combat, floatText, effects, progress, menu, ui: { updateInteract, interact, openMenu } };
+window.game = { scene, player, camCtl, world, renderer, input, hud, post, quality, grass, sharedTime, sky, combat, floatText, effects, progress, menu, quests, dialogue, townNpcs, ui: { updateInteract, interact, openMenu, talk } };
 
 // 關閉或切到背景前存檔
 addEventListener('pagehide', () => progress.save(sky.hour));

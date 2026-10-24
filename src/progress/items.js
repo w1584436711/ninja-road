@@ -7,6 +7,9 @@ export const ITEMS = {
   mail: { name: '鎖子甲', type: 'armor', price: 150, level: 1, desc: '受到的傷害 -15%', def: 0.85 },
   plate: { name: '鍛鐵護甲', type: 'armor', price: 520, level: 10, desc: '受到的傷害 -30%', def: 0.7 },
   charm: { name: '查克拉護符', type: 'accessory', price: 260, level: 4, desc: '查克拉上限 +20、回復速度 +50%', chakra: 20, regen: 1.5 },
+  // 任務獎勵（商店不賣）
+  fang: { name: '狼王之牙', type: 'weapon', price: 0, desc: '體術與苦無傷害 +25%', mul: 1.25 },
+  feather: { name: '鴉羽護符', type: 'accessory', price: 0, desc: '查克拉上限 +40、回復速度 +80%', chakra: 40, regen: 1.8 },
 };
 
 export const SHOP_STOCK = ['potion', 'pill', 'kunai2', 'mail', 'charm', 'kunai3', 'plate'];
