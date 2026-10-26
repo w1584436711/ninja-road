@@ -385,6 +385,12 @@ body.touch #jutsuCall { font-size: 30px; letter-spacing: 6px; }
   margin-top: 16px; font-size: 13px; color: #cfd8e8;
 }
 #quality { display: flex; gap: 4px; }
+.sound-btn {
+  min-width: 40px; padding: 4px 10px; font-family: inherit; font-size: 13px; cursor: pointer;
+  color: #cfd8e8; background: #2a3550; border: 1px solid #556; border-radius: 6px;
+}
+.sound-btn.on { color: #1a1206; background: #9fe39a; border-color: #9fe39a; font-weight: 700; }
+.sound-btn:focus-visible { outline: 2px solid #4fc3ff; outline-offset: 2px; }
 #quality button {
   min-width: 40px; padding: 4px 10px; font-family: inherit; font-size: 13px; cursor: pointer;
   color: #cfd8e8; background: #2a3550; border: 1px solid #556; border-radius: 6px;

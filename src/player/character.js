@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { lerp } from '../core/math.js';
+import { mergeByMaterial } from '../core/merge.js';
 
 // 程序化忍者角色。原點在腳底，面向 +Z。
 // 四肢分兩節（大腿/小腿、上臂/前臂），膝蓋與手肘可以彎。
@@ -29,22 +30,26 @@ export function createCharacter(opts = {}) {
   };
 
   const root = new THREE.Group();
+  // body：動畫用的起伏與傾斜都加在這層，root 的位置交給外部控制
+  const body = group(root, 0, 0, 0);
 
   // ---------- 腿 ----------
   const thighGeo = new THREE.CapsuleGeometry(0.105, 0.3, 4, 10);
   const shinGeo = new THREE.CapsuleGeometry(0.088, 0.3, 4, 10);
   const footGeo = new THREE.CapsuleGeometry(0.075, 0.16, 4, 8).rotateX(Math.PI / 2);
   const legs = [-1, 1].map(side => {
-    const hip = group(root, side * 0.12, 0.92, 0);
+    const hip = group(body, side * 0.12, 0.92, 0);
     hip.add(mesh(thighGeo, o.pants, 0, -0.21, 0));
     const knee = group(hip, 0, -0.44, 0);
     knee.add(mesh(shinGeo, o.pants, 0, -0.19, 0));
-    knee.add(mesh(footGeo, o.sandals, 0, -0.42, 0.05));
-    return { hip, knee };
+    // 腳踝：讓腳掌可以貼地、蹬地、抬腳尖
+    const ankle = group(knee, 0, -0.4, 0);
+    ankle.add(mesh(footGeo, o.sandals, 0, -0.02, 0.06));
+    return { hip, knee, ankle };
   });
 
   // ---------- 軀幹 ----------
-  const upper = group(root, 0, 0.92, 0);
+  const upper = group(body, 0, 0.92, 0);
   const torso = mesh(new THREE.CapsuleGeometry(0.22, 0.28, 6, 14), o.jacket, 0, 0.3, 0);
   torso.scale.set(1.05, 1, 0.72);
   upper.add(torso);
@@ -190,9 +195,21 @@ export function createCharacter(opts = {}) {
     arms[0].elbow.add(blade, guard);
   }
 
+  // 每個關節底下的零件依材質合併（例如頭上三十根頭髮變成一個），大幅減少繪製次數
+  const joints = [];
+  root.traverse(o => { if (o.children.filter(ch => ch.isMesh).length > 1) joints.push(o); });
+  joints.forEach(mergeByMaterial);
+  // 很小的零件（眼睛、眉毛、手）的影子看不出來，不畫影子省效能
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    o.geometry.computeBoundingSphere();
+    if (o.geometry.boundingSphere.radius < 0.1) o.castShadow = false;
+  });
+
   return {
-    root, upper, head, eyes, tails, blinkAt: 1 + Math.random() * 3,
-    legR: legs[0].hip, kneeR: legs[0].knee, legL: legs[1].hip, kneeL: legs[1].knee,
+    root, body, upper, head, eyes, tails, blinkAt: 1 + Math.random() * 3,
+    legR: legs[0].hip, kneeR: legs[0].knee, ankleR: legs[0].ankle,
+    legL: legs[1].hip, kneeL: legs[1].knee, ankleL: legs[1].ankle,
     armR: arms[0].shoulder, elbowR: arms[0].elbow, armL: arms[1].shoulder, elbowL: arms[1].elbow,
   };
 }
@@ -213,6 +230,7 @@ function applyAction(c, a, dt, lean) {
     case 'kick': // 迴旋踢
       ease(c.legR, -1.75, 0, k); ease(c.kneeR, 0.1, 0, k);
       ease(c.legL, 0.15, 0, k); ease(c.kneeL, 0.35, 0, k);
+      if (c.ankleR) { ease(c.ankleR, 0.4, 0, k); ease(c.ankleL, -0.5, 0, k); }
       ease(c.armL, 0.3, 0.9, k); ease(c.armR, 0.3, -0.9, k);
       return [-0.25, 0.3];
     case 'throw':
@@ -250,14 +268,43 @@ function ease(obj, x, z, k) {
   obj.rotation.z = lerp(obj.rotation.z, z, k);
 }
 
-// 程序化動畫。s: { phase, move(0..1), sprint, airborne, charging, swimming, time }
+// 依速度算出一個完整步伐（左右各一步）的長度，讓腳步和移動距離同步、不會滑步
+export const strideLength = speed => 0.8 + 0.45 * speed;
+
+// 依移動距離推進步伐相位
+export function advancePhase(phase, speed, dt, scale = 1) {
+  return phase + (speed * dt / (strideLength(speed) * scale)) * Math.PI * 2;
+}
+
+// 一條腿的步態。ph：這條腿的相位；sin(ph) > 0 代表腿在身後
+function gaitLeg(hip, knee, ankle, ph, amp, offset, kneeSwing, kneeStance, moving, k) {
+  const thigh = offset + amp * Math.sin(ph);
+  const swing = Math.max(0, -Math.cos(ph)); // 往前擺的階段（0..1）
+  const kneeA = (kneeStance + kneeSwing * swing ** 1.5) * moving + 0.03;
+  // 著地時腳掌平貼地面；蹬地時腳尖下壓；往前擺時腳尖上翹
+  const flat = -(thigh + kneeA);
+  const pushOff = Math.max(0, Math.sin(ph) - 0.4) * 0.6 * moving;
+  const ankleA = swing > 0 ? flat * 0.5 - 0.3 * swing * moving : flat + pushOff;
+  ease(hip, thigh, 0, k);
+  ease(knee, kneeA, 0, k);
+  if (ankle) ease(ankle, ankleA, 0, k);
+}
+
+// 程序化動畫。
+// s: { phase, speed(公尺/秒), sprint, airborne, charging, swimming, time, bank(轉彎傾斜), accel(加減速), action }
+// 舊呼叫方式只給 move(0..1) 也可以，會換算成速度
 export function animateCharacter(c, s, dt) {
   const k = 1 - Math.exp(-14 * dt);
-  const sw = Math.sin(s.phase);
-  // 往前擺的那隻腳膝蓋彎得多
-  const bendL = Math.max(0, Math.sin(s.phase + 1.2));
-  const bendR = Math.max(0, Math.sin(s.phase + 1.2 + Math.PI));
+  const kf = 1 - Math.exp(-22 * dt); // 腿要跟得上步伐，用比較快的平滑
+  const speed = s.speed ?? (s.move ?? 0) * 6;
+  const p = s.phase;
+  const sw = Math.sin(p);
+  const moving = Math.min(1, speed / 1.2); // 0 靜止 → 1 移動中
+  const g = speed < 2.6 ? 0 : speed > 5.5 ? 1 : ((speed - 2.6) / 2.9) ** 2 * (3 - 2 * (speed - 2.6) / 2.9); // 走→跑
   let lean = 0;
+  let twist = 0;
+  let bob = 0;
+  let sway = 0;
 
   if (s.charging) {
     // 結印：雙手合在胸前，微微蹲低
@@ -265,35 +312,52 @@ export function animateCharacter(c, s, dt) {
     ease(c.elbowL, -1.0, 0, k); ease(c.elbowR, -1.0, 0, k);
     ease(c.legL, -0.25, 0.14, k); ease(c.legR, -0.25, -0.14, k);
     ease(c.kneeL, 0.5, 0, k); ease(c.kneeR, 0.5, 0, k);
+    if (c.ankleL) { ease(c.ankleL, -0.25, 0, k); ease(c.ankleR, -0.25, 0, k); }
     lean = 0.15;
   } else if (s.airborne) {
     ease(c.legL, -1.1, 0, k); ease(c.legR, -0.35, 0, k);
     ease(c.kneeL, 1.5, 0, k); ease(c.kneeR, 0.9, 0, k);
+    if (c.ankleL) { ease(c.ankleL, 0.35, 0, k); ease(c.ankleR, 0.3, 0, k); }
     ease(c.armL, 0.5, 0.75, k); ease(c.armR, 0.5, -0.75, k);
     ease(c.elbowL, -0.6, 0, k); ease(c.elbowR, -0.6, 0, k);
     lean = 0.25;
-  } else if (s.sprint && s.move > 0.3) {
-    // 經典忍者跑：前傾、雙手往後伸直
-    ease(c.legL, sw * 1.15 - 0.2, 0, k); ease(c.legR, -sw * 1.15 - 0.2, 0, k);
-    ease(c.kneeL, 0.2 + bendL * 1.6, 0, k); ease(c.kneeR, 0.2 + bendR * 1.6, 0, k);
+  } else if (s.sprint && moving > 0.3) {
+    // 忍者跑：大幅前傾、雙手往後伸直、步伐很大
+    gaitLeg(c.legL, c.kneeL, c.ankleL, p, 1.1, -0.25, 1.8, 0.35, 1, kf);
+    gaitLeg(c.legR, c.kneeR, c.ankleR, p + Math.PI, 1.1, -0.25, 1.8, 0.35, 1, kf);
     ease(c.armL, 1.3, 0.18, k); ease(c.armR, 1.3, -0.18, k);
     ease(c.elbowL, 0, 0, k); ease(c.elbowR, 0, 0, k);
     lean = 0.6;
+    bob = -Math.cos(p * 2) * 0.05;
   } else {
-    const a = s.move * (s.swimming ? 0.5 : 0.75);
-    ease(c.legL, sw * a, 0, k); ease(c.legR, -sw * a, 0, k);
-    ease(c.kneeL, 0.08 + bendL * a * 1.1, 0, k); ease(c.kneeR, 0.08 + bendR * a * 1.1, 0, k);
-    ease(c.armL, -sw * a * 0.8, 0.1, k); ease(c.armR, sw * a * 0.8, -0.1, k);
-    ease(c.elbowL, -0.25 - a * 0.4, 0, k); ease(c.elbowR, -0.25 - a * 0.4, 0, k);
-    lean = 0.08 * s.move;
+    // 走路／跑步：依速度在兩種步態之間混合
+    const amp = lerp(0.42, 0.8, g) * moving * (s.swimming ? 0.6 : 1);
+    const off = -0.1 * g * moving; // 跑步時腳往前伸
+    gaitLeg(c.legL, c.kneeL, c.ankleL, p, amp, off, lerp(0.95, 1.75, g), lerp(0.06, 0.3, g), moving, kf);
+    gaitLeg(c.legR, c.kneeR, c.ankleR, p + Math.PI, amp, off, lerp(0.95, 1.75, g), lerp(0.06, 0.3, g), moving, kf);
+    // 手臂和同側的腳反向擺動；跑步時手肘彎成九十度
+    const armA = lerp(0.32, 0.75, g) * moving;
+    const elbow = -lerp(0.18, 1.35, g) * moving - 0.12;
+    ease(c.armL, -sw * armA, lerp(0.08, 0.14, g), kf); ease(c.armR, sw * armA, -lerp(0.08, 0.14, g), kf);
+    ease(c.elbowL, elbow - Math.max(0, -sw) * 0.25 * moving, 0, kf);
+    ease(c.elbowR, elbow - Math.max(0, sw) * 0.25 * moving, 0, kf);
+    lean = lerp(0.04, 0.2, g) * moving;
+    // 肩膀和骨盆反向扭轉
+    twist = -sw * lerp(0.1, 0.18, g) * moving;
+    // 走路時在腳步交錯的瞬間重心最高；跑步則是著地時最低、騰空時最高
+    bob = lerp(Math.cos(p * 2) * 0.025, -Math.cos(p * 2) * 0.055, g) * moving;
+    // 重心左右移到支撐腳
+    sway = sw * lerp(0.035, 0.02, g) * moving;
   }
-  let twist = 0;
+  // 加速時身體前傾、煞車時後仰
+  lean += Math.max(-0.15, Math.min(0.15, (s.accel ?? 0) * 0.02));
   if (s.action) [lean, twist] = applyAction(c, s.action, dt, lean);
+
   c.upper.rotation.y = lerp(c.upper.rotation.y, twist, 1 - Math.exp(-25 * dt));
   c.upper.rotation.x = lerp(c.upper.rotation.x, lean, k);
-  // 跑步時身體上下起伏
-  const bob = s.move > 0.3 && !s.airborne ? Math.abs(sw) * 0.03 : 0;
-  c.upper.position.y = 0.92 + Math.sin(s.time * 2.2) * 0.008 + bob;
+  c.upper.position.y = 0.92 + (moving < 0.2 ? Math.sin(s.time * 2.2) * 0.008 : 0);
+  c.body.position.y = lerp(c.body.position.y, bob, kf); // 整個身體一起起伏
+  c.body.rotation.z = lerp(c.body.rotation.z, sway + (s.bank ?? 0), k);
   c.head.rotation.x = lerp(c.head.rotation.x, -lean * 0.5, k);
 
   // 眨眼：每隔幾秒閉眼 0.12 秒
@@ -301,10 +365,10 @@ export function animateCharacter(c, s, dt) {
   const closed = s.time > c.blinkAt;
   for (const e of c.eyes) e.scale.y = closed ? 0.12 : 1;
 
-  // 護額綁帶：速度越快飄得越高，帶一點抖動
-  const speed = s.airborne ? 1 : s.move * (s.sprint ? 1.4 : 0.6);
+  // 護額綁帶、圍巾：速度越快飄得越高，帶一點抖動
+  const wind = s.airborne ? 1 : Math.min(1.4, speed / 10);
   for (const [i, t] of c.tails.entries()) {
-    const flutter = Math.sin(s.time * 14 + i * 1.7) * 0.15 * speed;
-    t.rotation.x = lerp(t.rotation.x, 0.15 + speed * 1.0 + flutter, 1 - Math.exp(-8 * dt));
+    const flutter = Math.sin(s.time * 14 + i * 1.7) * 0.15 * wind;
+    t.rotation.x = lerp(t.rotation.x, 0.15 + wind * 1.0 + flutter, 1 - Math.exp(-8 * dt));
   }
 }

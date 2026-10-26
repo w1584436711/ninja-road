@@ -29,7 +29,7 @@ export const THEME = {
 
   npcs: {
     villager: '風鈴村民', chunin: '風鈴中忍', student: '忍術學堂學生', shopOwner: '鈴屋老闆',
-    leader: '天守大人', traveler: '旅人',
+    leader: '天守大人', traveler: '旅人', child: '村裡的小孩',
   },
 
   skills: {

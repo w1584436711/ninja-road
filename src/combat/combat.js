@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { lerpAngle, clamp } from '../core/math.js';
-import { createCharacter, animateCharacter } from '../player/character.js';
+import { createCharacter, animateCharacter, advancePhase } from '../player/character.js';
 import { toonify, toonMaterial } from '../render/toon.js';
 import { getTerrainHeight } from '../world/terrain.js';
 import { THEME } from '../data/theme.js';
@@ -86,9 +86,9 @@ class Clone {
     const r = this.model.root;
     r.position.copy(this.pos);
     r.rotation.y = this.facing;
-    this.phase += dt * speed * 0.9;
+    this.phase = advancePhase(this.phase, speed, dt);
     animateCharacter(this.model, {
-      phase: this.phase, move: speed ? 1 : 0, sprint: speed > 0, time: this.time,
+      phase: this.phase, speed, sprint: speed > 0, time: this.time,
       action: this.actionT < 1 ? { type: this.punch ? 'punch1' : 'punch2', t: this.actionT } : null,
     }, dt);
   }

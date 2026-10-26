@@ -96,6 +96,11 @@ export class PostFX {
 
   render() {
     const r = this.renderer;
+    // 視窗縮到最小時畫布是 0×0，跳過以免 WebGL 報錯
+    if (this.target.width < 1 || this.target.height < 1) {
+      this.setSize();
+      if (this.target.width < 1 || this.target.height < 1) return;
+    }
     r.setRenderTarget(this.target);
     r.render(this.scene, this.camera);
     this.bloom?.render(r, null, this.target, 0, false);

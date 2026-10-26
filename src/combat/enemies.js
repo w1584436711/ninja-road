@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mulberry32, lerpAngle } from '../core/math.js';
 import { createNameplate } from '../core/textures.js';
-import { createCharacter, animateCharacter } from '../player/character.js';
+import { createCharacter, animateCharacter, advancePhase } from '../player/character.js';
 import { createWolf, animateWolf } from './wolf.js';
 import { toonify } from '../render/toon.js';
 import { getTerrainHeight, VILLAGE_RADIUS } from '../world/terrain.js';
@@ -471,10 +471,11 @@ class Enemy {
     const r = this.root;
     r.position.copy(this.pos);
     r.rotation.y = this.facing;
-    this.phase += dt * speed * (d.model === 'wolf' ? 1.3 : 0.9);
+    if (d.model === 'wolf') this.phase += dt * speed * 1.3;
+    else this.phase = advancePhase(this.phase, speed, dt, d.scale ?? 1);
     const move = Math.min(1, speed / (d.model === 'wolf' ? 6 : 4));
     if (d.model === 'wolf') animateWolf(this.model, { phase: this.phase, move, action, time: this.time }, dt);
-    else if (d.model === 'human') animateCharacter(this.model, { phase: this.phase, move, sprint: speed > d.walk + 1, action, time: this.time }, dt);
+    else if (d.model === 'human') animateCharacter(this.model, { phase: this.phase, speed, sprint: speed > 7.5, action, time: this.time }, dt);
 
     // 受擊閃白、蓄力閃紅
     const windup = this.state === 'windup' || this.state === 'aim' || this.state === 'skill';

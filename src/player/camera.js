@@ -7,8 +7,8 @@ export class ThirdPersonCamera {
   constructor(camera) {
     this.camera = camera;
     this.yaw = 0;
-    this.pitch = 0.32;
-    this.dist = 9;
+    this.pitch = 0.26;
+    this.dist = 7.5;
     this.target = new THREE.Vector3();
     this.desired = new THREE.Vector3();
     this.snapped = false;

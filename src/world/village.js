@@ -3,6 +3,7 @@ import { mulberry32 } from '../core/math.js';
 import { textTexture } from '../core/textures.js';
 import { getTerrainHeight, VILLAGE_RADIUS } from './terrain.js';
 import { THEME } from '../data/theme.js';
+import { mergeByMaterial } from '../core/merge.js';
 
 const WALL_COLORS = [0xf3ead8, 0xe8dcc2, 0xf6f1e7, 0xdccfb4, 0xeadfc8];
 const ROOF_COLORS = [0xc0462f, 0x3d6fa8, 0x5a8f4e, 0xd98a2b, 0x8b5a3c, 0xb8603a];
@@ -69,20 +70,120 @@ function createHouse(group, world, rng, x, z, w, d) {
   }
   world.addBox(x, z, w, d, top);
 
-  // 門和窗：朝向最近的道路
+  // ---------- 門面：朝向最近的道路 ----------
   const towardX = Math.abs(x) < Math.abs(z);
-  const sx = towardX ? -Math.sign(x) || 1 : 0;
-  const sz = towardX ? 0 : -Math.sign(z) || 1;
-  const fx = x + sx * (w / 2 + 0.03), fz = z + sz * (d / 2 + 0.03);
-  const doorW = towardX ? 0.1 : 1.4, doorD = towardX ? 1.4 : 0.1;
-  group.add(box(doorW, 2.2, doorD, 0x5a3b26, fx, base + 1.1, fz));
-  for (const off of [-1, 1]) {
-    const wx = towardX ? fx : fx + off * (w / 4 + 0.6);
-    const wz = towardX ? fz + off * (d / 4 + 0.6) : fz;
-    const win = box(towardX ? 0.1 : 1.1, 0.9, towardX ? 1.1 : 0.1, 0x9fd2ee, wx, base + h * 0.62, wz, { roughness: 0.2 });
-    win.userData.glow = 'window'; // 夜裡亮燈
-    group.add(win);
+  const nx = towardX ? -Math.sign(x) || 1 : 0; // 門面朝外的方向
+  const nz = towardX ? 0 : -Math.sign(z) || 1;
+  const tx = towardX ? 0 : 1, tz = towardX ? 1 : 0; // 沿著門面的方向
+  const halfN = towardX ? w / 2 : d / 2, halfT = towardX ? d / 2 : w / 2;
+  // 在門面上放一個方塊：u 沿牆面、y 高度、out 離牆距離；尺寸依序是寬（沿牆）、高、厚（向外）
+  const front = (u, y, out, sw, sh, so, color, opts) => {
+    const px = x + nx * (halfN + out) + tx * u, pz = z + nz * (halfN + out) + tz * u;
+    const m = box(towardX ? so : sw, sh, towardX ? sw : so, color, px, base + y, pz, opts);
+    group.add(m);
+    return m;
+  };
+  const WOOD = 0x5a3b26, DARK = 0x3a2818, STONE = 0x8a8478;
+
+  // 石砌地基
+  group.add(box(w + 0.14, 0.7, d + 0.14, STONE, x, base + 0.05, z));
+  // 一半的房子是木造町家風：腰間橫樑＋四角柱
+  if (rng() < 0.5) {
+    group.add(box(w + 0.06, 0.14, d + 0.06, 0x6a4a32, x, base + h * 0.48, z));
+    for (const cx of [-1, 1]) for (const cz of [-1, 1]) {
+      group.add(box(0.18, h, 0.18, 0x6a4a32, x + cx * (w / 2 + 0.01), base + h / 2, z + cz * (d / 2 + 0.01)));
+    }
   }
+  // 平屋頂加矮牆
+  if (top === base + h + 0.4) {
+    const py = base + h + 0.55;
+    group.add(box(w + 0.4, 0.35, 0.15, roof, x, py, z - d / 2 - 0.12));
+    group.add(box(w + 0.4, 0.35, 0.15, roof, x, py, z + d / 2 + 0.12));
+    group.add(box(0.15, 0.35, d + 0.4, roof, x - w / 2 - 0.12, py, z));
+    group.add(box(0.15, 0.35, d + 0.4, roof, x + w / 2 + 0.12, py, z));
+  }
+
+  // 門：門框、門板、石階、雨棚
+  front(0, 1.2, 0.02, 1.75, 2.5, 0.06, DARK);
+  front(0, 1.1, 0.04, 1.4, 2.2, 0.06, WOOD);
+  front(0, 0.07, 0.4, 1.9, 0.14, 0.75, STONE);
+  front(0, 2.62, 0.45, 2.2, 0.1, 0.95, roof);
+  const streetDist = Math.abs(towardX ? x : z) - halfN; // 門面到街道中線的距離
+  if (streetDist < 10 && rng() < 0.55) front(0, 2.0, 0.08, 1.5, 0.55, 0.03, [0x2a3a6a, 0x6a2a2a, 0x2a5a4a][Math.floor(rng() * 3)]); // 門簾
+
+  // 窗：窗框、玻璃（夜裡亮燈）、十字窗格、花台
+  for (const off of [-1, 1]) {
+    const u = off * (halfT / 2 + 0.6);
+    const y = h * 0.62;
+    front(u, y, 0.02, 1.35, 1.15, 0.06, DARK);
+    const win = front(u, y, 0.04, 1.1, 0.9, 0.06, 0x9fd2ee, { roughness: 0.2 });
+    win.userData.glow = 'window';
+    front(u, y, 0.08, 0.06, 0.9, 0.04, DARK);
+    front(u, y, 0.08, 1.1, 0.06, 0.04, DARK);
+    if (rng() < 0.4) {
+      front(u, y - 0.62, 0.18, 1.2, 0.22, 0.32, 0x7a5232);
+      for (let i = 0; i < 4; i++) {
+        const f = new THREE.Mesh(flowerGeo, mat(FLOWER_COLORS[Math.floor(rng() * FLOWER_COLORS.length)]));
+        const fu = u - 0.45 + i * 0.3;
+        f.position.set(x + nx * (halfN + 0.2) + tx * fu, base + y - 0.42, z + nz * (halfN + 0.2) + tz * fu);
+        group.add(f);
+      }
+    }
+  }
+  // 門邊的盆栽
+  if (rng() < 0.5) {
+    const side = rng() < 0.5 ? -1 : 1;
+    const pot = front(side * 1.3, 0.22, 0.35, 0.45, 0.44, 0.45, 0xb5653a);
+    const plant = new THREE.Mesh(flowerGeo, mat(0x4e8c38));
+    plant.scale.setScalar(3.2);
+    plant.position.set(pot.position.x, base + 0.7, pot.position.z);
+    group.add(plant);
+  }
+  // 側牆的冷氣機、轉角的排水管
+  if (rng() < 0.35) {
+    const side = rng() < 0.5 ? -1 : 1;
+    const px = x + tx * side * (halfT + 0.2) + nx * (halfN * 0.3), pz = z + tz * side * (halfT + 0.2) + nz * (halfN * 0.3);
+    group.add(box(towardX ? 0.8 : 0.35, 0.55, towardX ? 0.35 : 0.8, 0xd8d8d0, px, base + 1.4, pz));
+    group.add(box(towardX ? 0.5 : 0.37, 0.4, towardX ? 0.37 : 0.5, 0x5a5a5a, px + tx * side * 0.01, base + 1.4, pz + tz * side * 0.01));
+  }
+  if (rng() < 0.4) {
+    const pipe = new THREE.Mesh(pipeGeo, mat(0x7a8a8a));
+    const side = rng() < 0.5 ? -1 : 1;
+    pipe.scale.y = h;
+    pipe.position.set(x + nx * (halfN + 0.08) + tx * side * (halfT - 0.15), base + h / 2, z + nz * (halfN + 0.08) + tz * side * (halfT - 0.15));
+    group.add(pipe);
+  }
+
+  // 臨街的店家掛直式招牌
+  let sign = null;
+  if (streetDist < 8 && rng() < 0.6) {
+    const text = SHOP_SIGNS[Math.floor(rng() * SHOP_SIGNS.length)];
+    const u = (halfT - 0.6) * (rng() < 0.5 ? -1 : 1);
+    front(u, 2.95, 0.12, 0.1, 0.1, 0.25, DARK); // 掛架
+    const board = new THREE.Mesh(new THREE.BoxGeometry(towardX ? 0.75 : 0.08, 1.7, towardX ? 0.08 : 0.75), signMaterial(text));
+    board.position.set(x + nx * (halfN + 0.55) + tx * u, base + 2.3, z + nz * (halfN + 0.55) + tz * u);
+    board.castShadow = true;
+    // 招牌和牆面垂直伸出去，寫字的大面朝向街道兩頭
+    group.add(board);
+    sign = text;
+  }
+  return { base, h, sign, front: { x: x + nx * halfN, z: z + nz * halfN, nx, nz } };
+}
+
+// 招牌與花
+const SHOP_SIGNS = ['茶', '米', '酒', '藥', '書', '花', '湯', '宿', '鍛冶', '團子', '傘', '布', '炭', '豆腐', '魚'];
+const FLOWER_COLORS = [0xff8fb0, 0xffd23a, 0xff5a4a, 0xffffff, 0xc49aff];
+const flowerGeo = new THREE.IcosahedronGeometry(0.11, 0);
+const pipeGeo = new THREE.CylinderGeometry(0.06, 0.06, 1, 6);
+const signMats = new Map();
+function signMaterial(text) {
+  if (!signMats.has(text)) {
+    const tex = textTexture(text.split('').join('\n'), {
+      width: 128, height: 256, bg: '#efe6d0', fg: '#1d1a18', font: `bold ${text.length > 1 ? 90 : 110}px "Microsoft JhengHei", sans-serif`,
+    });
+    signMats.set(text, new THREE.MeshStandardMaterial({ map: tex }));
+  }
+  return signMats.get(text);
 }
 
 function createTower(group, world) {
@@ -320,8 +421,8 @@ export function createVillage(world) {
       if (Math.hypot(x - TOWER_POS.x, z - TOWER_POS.z) < 26) continue;
       if (Math.hypot(x, z) > VILLAGE_RADIUS - 14) continue;
       if (z < -112) continue; // 懸崖
-      createHouse(group, world, rng, x, z, w, d);
-      houses.push({ x, z, w, d });
+      const info = createHouse(group, world, rng, x, z, w, d);
+      houses.push({ x, z, w, d, ...info });
     }
   }
 
@@ -335,5 +436,8 @@ export function createVillage(world) {
     createStall(group, world, s);
     houses.push({ x: s.x, z: s.z, w: s.w, d: s.d + 1 });
   }
+  // 靜態物件依材質合併，細節再多也只有幾十次繪製
+  const stats = mergeByMaterial(group);
+  group.userData.mergeStats = stats;
   return { group, houses };
 }
