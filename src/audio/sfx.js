@@ -9,7 +9,7 @@ const SURFACES = {
   grass: { filter: 'highpass', freq: 1800, q: 0.7, len: 0.11, gain: 0.32, thump: 70, thumpGain: 0.15 },
   sand: { filter: 'lowpass', freq: 1400, q: 0.7, len: 0.12, gain: 0.4, thump: 60, thumpGain: 0.15 },
   wood: { filter: 'bandpass', freq: 700, q: 1.2, len: 0.06, gain: 0.35, thump: 150, thumpGain: 0.5 },
-  water: { filter: 'lowpass', freq: 2200, q: 0.8, len: 0.16, gain: 0.45, thump: 0, thumpGain: 0, splash: true },
+  // 水面另外用 splash() 合成
 };
 
 export class Sfx {
@@ -75,11 +75,69 @@ export class Sfx {
     o.stop(at + len + 0.02);
   }
 
+  // 水花：潑水聲（濾波頻率由高往低掃）＋幾顆水滴的「啵」聲（音高往上滑）＋細碎水沫
+  splash(vol, big = false) {
+    const c = this.ctx;
+    const at = c.currentTime;
+    const len = big ? 0.38 : 0.16;
+
+    // 1. 潑水聲
+    const src = c.createBufferSource();
+    src.buffer = this.noise;
+    const bp = c.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 0.9;
+    bp.frequency.setValueAtTime(big ? 1100 : 1500, at);
+    bp.frequency.exponentialRampToValueAtTime(big ? 380 : 520, at + len);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(0.6 * vol, at + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0008, at + len);
+    src.connect(bp).connect(g).connect(this.master);
+    src.start(at, Math.random() * 0.6, len + 0.05);
+
+    // 2. 水滴：短促的正弦波，音高快速往上滑
+    const drops = big ? 6 : 2 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < drops; i++) {
+      const t = at + 0.03 + Math.random() * (big ? 0.3 : 0.12);
+      const f0 = 450 + Math.random() * 700;
+      const o = c.createOscillator();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(f0, t);
+      o.frequency.exponentialRampToValueAtTime(f0 * (1.8 + Math.random() * 0.8), t + 0.045);
+      const dg = c.createGain();
+      dg.gain.setValueAtTime(0, t);
+      dg.gain.linearRampToValueAtTime((0.07 + Math.random() * 0.08) * vol, t + 0.004);
+      dg.gain.exponentialRampToValueAtTime(0.0008, t + 0.06);
+      o.connect(dg).connect(this.master);
+      o.start(t);
+      o.stop(t + 0.08);
+    }
+
+    // 3. 細碎水沫
+    const fizz = c.createBufferSource();
+    fizz.buffer = this.noise;
+    const hp = c.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 3800;
+    const fg = c.createGain();
+    const fl = big ? 0.45 : 0.22;
+    fg.gain.setValueAtTime(0, at);
+    fg.gain.linearRampToValueAtTime(0.13 * vol, at + 0.02);
+    fg.gain.exponentialRampToValueAtTime(0.0008, at + fl);
+    fizz.connect(hp).connect(fg).connect(this.master);
+    fizz.start(at, Math.random() * 0.5, fl + 0.05);
+  }
+
   // speed：公尺/秒，跑越快踩越重
   step(surface, speed) {
     if (!this.ready) return;
-    const s = SURFACES[surface] ?? SURFACES.grass;
     const vol = Math.min(1, 0.35 + speed / 12) * (0.85 + Math.random() * 0.3);
+    if (surface === 'water') {
+      this.splash(vol);
+      return;
+    }
+    const s = SURFACES[surface] ?? SURFACES.grass;
     const at = this.ctx.currentTime;
     this.burst(s, at, vol);
     if (s.crunch) this.burst({ ...s, freq: s.freq * 2.2, len: s.len * 0.6, gain: s.gain * 0.5 }, at + 0.025, vol);
@@ -88,10 +146,14 @@ export class Sfx {
 
   land(surface, impact) {
     if (!this.ready) return;
-    const s = SURFACES[surface] ?? SURFACES.grass;
     const vol = Math.min(1.4, impact / 12);
+    if (surface === 'water') {
+      this.splash(vol, true);
+      return;
+    }
+    const s = SURFACES[surface] ?? SURFACES.grass;
     const at = this.ctx.currentTime;
     this.burst({ ...s, len: s.len * 2.2 }, at, vol);
-    if (s.thump || surface !== 'water') this.thump(s.thump || 70, 0.6 * vol, at, 0.14);
+    this.thump(s.thump || 70, 0.6 * vol, at, 0.14);
   }
 }
