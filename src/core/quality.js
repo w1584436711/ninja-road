@@ -5,7 +5,7 @@ export const QUALITY_PRESETS = {
   high: { label: '高', pixelRatio: 2, shadows: true, shadowSize: 2048, samples: 4, bloom: true, fogFar: 680, grassRadius: 56, grassDensity: 5, rainDrops: 1600 },
 };
 
-const STORAGE_KEY = 'naruto-world.quality';
+const STORAGE_KEY = 'ninja-road.quality';
 
 export function loadQuality(isTouch) {
   let key = null;

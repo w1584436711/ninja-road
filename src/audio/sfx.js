@@ -1,6 +1,6 @@
 // 用 Web Audio 即時合成的音效（不需要音檔）：腳步聲依地面材質不同，以及落地、水花。
 // 瀏覽器規定要使用者操作後才能出聲，所以在按下「開始」時呼叫 unlock()。
-const STORAGE_KEY = 'naruto-world.sound';
+const STORAGE_KEY = 'ninja-road.sound';
 
 // 各種地面的腳步聲：雜訊經過濾波（決定質感）＋低頻悶響（決定重量）
 const SURFACES = {
