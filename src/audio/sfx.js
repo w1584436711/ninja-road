@@ -75,58 +75,57 @@ export class Sfx {
     o.stop(at + len + 0.02);
   }
 
-  // 水花：潑水聲（濾波頻率由高往低掃）＋幾顆水滴的「啵」聲（音高往上滑）＋細碎水沫
+  // 水花：「唰」一聲的潑水（音量慢慢湧起，沒有敲擊般的瞬間起音）＋水被攪動的咕嚕聲＋細碎水沫。
+  // 全部用雜訊做，不用正弦波：短促的純音聽起來像敲木頭，不像水。
   splash(vol, big = false) {
     const c = this.ctx;
-    const at = c.currentTime;
-    const len = big ? 0.38 : 0.16;
+    const at = c.currentTime + Math.random() * 0.02;
+    const len = big ? 0.55 : 0.28;
+    const peak = big ? 0.06 : 0.035; // 起音時間，太短就會變成「喀」
 
-    // 1. 潑水聲
-    const src = c.createBufferSource();
-    src.buffer = this.noise;
+    const noise = (offsetMax, dur) => {
+      const s = c.createBufferSource();
+      s.buffer = this.noise;
+      s.playbackRate.value = 0.85 + Math.random() * 0.3;
+      s.start(at, Math.random() * offsetMax, dur + 0.05);
+      return s;
+    };
+    const envelope = (gain, attack, dur) => {
+      const g = c.createGain();
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(gain, at + attack);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+      return g;
+    };
+
+    // 1. 潑水：低通濾波往上開再收回，聽起來像「唰——」
+    const lp = c.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.Q.value = 1.6;
+    const f0 = (big ? 500 : 700) * (0.85 + Math.random() * 0.3);
+    lp.frequency.setValueAtTime(f0, at);
+    lp.frequency.exponentialRampToValueAtTime(f0 * 3.2, at + peak + 0.03);
+    lp.frequency.exponentialRampToValueAtTime(f0 * 0.8, at + len);
+    noise(0.5, len).connect(lp).connect(envelope(0.55 * vol, peak, len)).connect(this.master);
+
+    // 2. 咕嚕：窄帶雜訊、中心頻率快速抖動，像水被腳攪動
     const bp = c.createBiquadFilter();
     bp.type = 'bandpass';
-    bp.Q.value = 0.9;
-    bp.frequency.setValueAtTime(big ? 1100 : 1500, at);
-    bp.frequency.exponentialRampToValueAtTime(big ? 380 : 520, at + len);
-    const g = c.createGain();
-    g.gain.setValueAtTime(0, at);
-    g.gain.linearRampToValueAtTime(0.6 * vol, at + 0.008);
-    g.gain.exponentialRampToValueAtTime(0.0008, at + len);
-    src.connect(bp).connect(g).connect(this.master);
-    src.start(at, Math.random() * 0.6, len + 0.05);
-
-    // 2. 水滴：短促的正弦波，音高快速往上滑
-    const drops = big ? 6 : 2 + Math.floor(Math.random() * 2);
-    for (let i = 0; i < drops; i++) {
-      const t = at + 0.03 + Math.random() * (big ? 0.3 : 0.12);
-      const f0 = 450 + Math.random() * 700;
-      const o = c.createOscillator();
-      o.type = 'sine';
-      o.frequency.setValueAtTime(f0, t);
-      o.frequency.exponentialRampToValueAtTime(f0 * (1.8 + Math.random() * 0.8), t + 0.045);
-      const dg = c.createGain();
-      dg.gain.setValueAtTime(0, t);
-      dg.gain.linearRampToValueAtTime((0.07 + Math.random() * 0.08) * vol, t + 0.004);
-      dg.gain.exponentialRampToValueAtTime(0.0008, t + 0.06);
-      o.connect(dg).connect(this.master);
-      o.start(t);
-      o.stop(t + 0.08);
+    bp.Q.value = 6;
+    const gl = len * 0.9;
+    const wobbles = big ? 7 : 4;
+    bp.frequency.setValueAtTime(400 + Math.random() * 300, at);
+    for (let i = 1; i <= wobbles; i++) {
+      bp.frequency.exponentialRampToValueAtTime(350 + Math.random() * 900, at + (gl * i) / wobbles);
     }
+    noise(0.5, gl).connect(bp).connect(envelope(0.35 * vol, peak + 0.02, gl)).connect(this.master);
 
-    // 3. 細碎水沫
-    const fizz = c.createBufferSource();
-    fizz.buffer = this.noise;
+    // 3. 水沫：細碎的「嘶」，比潑水晚一點收尾
     const hp = c.createBiquadFilter();
     hp.type = 'highpass';
-    hp.frequency.value = 3800;
-    const fg = c.createGain();
-    const fl = big ? 0.45 : 0.22;
-    fg.gain.setValueAtTime(0, at);
-    fg.gain.linearRampToValueAtTime(0.13 * vol, at + 0.02);
-    fg.gain.exponentialRampToValueAtTime(0.0008, at + fl);
-    fizz.connect(hp).connect(fg).connect(this.master);
-    fizz.start(at, Math.random() * 0.5, fl + 0.05);
+    hp.frequency.value = 3200;
+    const fl = len * 1.3;
+    noise(0.5, fl).connect(hp).connect(envelope(0.07 * vol, peak + 0.03, fl)).connect(this.master);
   }
 
   // speed：公尺/秒，跑越快踩越重
