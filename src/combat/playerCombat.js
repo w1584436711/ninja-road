@@ -105,6 +105,7 @@ export class PlayerCombat {
         p.vel.z = Math.cos(face) * lunge;
       }
     }
+    this.c.sound(i === 2 ? 'swingHeavy' : 'swing');
     this.lastCombo = i;
     this.comboTimer = step.dur + 0.5;
     this.start(step.type, step.dur, { combo: i, hitAt: step.hit, face, onHit: () => this.meleeHit(step) });
@@ -196,16 +197,23 @@ export class PlayerCombat {
     if (match) {
       this.seals = [];
       if (this.c.progress.knows(match.key)) this.cast(match);
-      else this.c.notice(`尚未習得「${jutsuName(match)}」`);
+      else {
+        this.c.sound('fail');
+        this.c.notice(`尚未習得「${jutsuName(match)}」`);
+      }
     } else if (!JUTSU.some(j => j.seals.join(',').startsWith(seq))) {
       this.seals = [];
+      this.c.sound('fail');
       this.c.notice('結印失敗');
+    } else {
+      this.c.sound('seal');
     }
   }
 
   cast(def) {
     const prog = this.c.progress;
-    if (!this.p.useChakra(prog.jutsuCost(def))) return;
+    if (!this.p.useChakra(prog.jutsuCost(def))) return this.c.sound('fail');
+    this.c.sound('cast');
     this.c.hud.jutsuCall(jutsuName(def));
     performJutsu(this, def, prog.jutsuMul(def.key));
     if (prog.recordCast(def.key)) this.c.notice(`「${jutsuName(def)}」熟練度提升！`);

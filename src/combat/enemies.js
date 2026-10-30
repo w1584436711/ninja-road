@@ -183,6 +183,7 @@ class Enemy {
     const head = new THREE.Vector3(this.pos.x, this.pos.y + this.def.height + 1, this.pos.z);
     if (name === 'howl') {
       ft.spawn('嗷嗚——！', head, 'alert');
+      combat.sound('howl', this.pos);
       combat.camCtl.shake = 0.3;
       for (const side of [-1, 1]) this.mgr.summon('wolf', this, side * 3, combat);
     } else if (name === 'fan') {

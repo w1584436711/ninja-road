@@ -112,9 +112,11 @@ const grass = new Grass(scene, world, quality); // 草在 toonify 之後建立�
 // ---------- 戰鬥 ----------
 const floatText = new FloatText(camera);
 const combat = new Combat({ scene, world, effects, player, camCtl, floatText, hud, progress });
+combat.sfx = sfx;
 
 progress.onLevelUp = (level, newRank, canPickNature) => {
   hud.levelUp(level, newRank, canPickNature);
+  sfx.play('levelUp');
   hud.refreshJutsu();
   const at = new THREE.Vector3(player.pos.x, player.pos.y + 0.1, player.pos.z);
   effects.ring(at, 0xffe08a, 4, 0.8);

@@ -71,6 +71,8 @@ export class Projectiles {
     mesh.position.copy(o.pos);
     mesh.rotation.y = Math.atan2(o.dir.x, o.dir.z);
     this.c.scene.add(mesh);
+    const launch = { kunai: 'throw', fire: 'fire', thunder: 'zap', water: 'water' }[o.kind];
+    if (launch) this.c.sound(launch, o.pos);
     this.list.push({
       gravity: 0, life: 2.5, radius: 0.3, kb: 2, ...o,
       mesh, pos: mesh.position, vel: o.dir.clone().multiplyScalar(o.speed), age: 0, stuck: false, trail: 0, hitSet: new Set(),
@@ -92,6 +94,7 @@ export class Projectiles {
     } else if (p.kind === 'kunai') {
       p.stuck = true;
       p.life = p.age + 2;
+      this.c.sound('clink', p.pos);
     } else {
       this.c.effects.smoke(p.pos, 6, p.kind === 'thunder' ? 0xfff2a0 : 0xd8f2ff, 0.3, 1);
       this.remove(i);
@@ -169,6 +172,7 @@ export class Projectiles {
       const top = c.world.floorAt(p.pos.x, p.pos.z, 1e9, ground);
       if (p.pos.y < WATER_LEVEL && ground < WATER_LEVEL) {
         c.effects.ring(this.tmp.set(p.pos.x, WATER_LEVEL, p.pos.z), 0xffffff, 1.5);
+        c.sound('plop', p.pos);
         if (p.kind === 'fire') c.effects.smoke(p.pos, 10, 0xeeeeee, 0.6, 1.5); // 蒸氣
         this.remove(i);
       } else if (p.pos.y < ground || p.pos.y < top) {

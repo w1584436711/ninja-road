@@ -1,5 +1,7 @@
 // 用 Web Audio 即時合成的音效（不需要音檔）：腳步聲依地面材質不同，以及落地、水花。
 // 瀏覽器規定要使用者操作後才能出聲，所以在按下「開始」時呼叫 unlock()。
+import { SOUNDS } from './sounds.js';
+
 const STORAGE_KEY = 'ninja-road.sound';
 
 // 各種地面的腳步聲：雜訊經過濾波（決定質感）＋低頻悶響（決定重量）
@@ -93,14 +95,16 @@ export class Sfx {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return;
       this.ctx = new AC();
-      // 一秒的白噪音，所有聲音都從這裡取片段
-      const buf = this.ctx.createBuffer(1, this.ctx.sampleRate, this.ctx.sampleRate);
+      // 兩秒的白噪音，所有聲音都從這裡取片段
+      const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * 2, this.ctx.sampleRate);
       const data = buf.getChannelData(0);
       for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-      this.noise = buf;
+      this.noiseBuf = buf;
       this.master = this.ctx.createGain();
       this.master.gain.value = 0.5;
       this.master.connect(this.ctx.destination);
+      this.out = this.master;
+      this.lastPlayed = {};
       const c = this.ctx;
       this.splashes = {
         small: Array.from({ length: 6 }, () => makeSplash(c, false)),
@@ -121,7 +125,7 @@ export class Sfx {
   burst({ filter, freq, q, len, gain }, at, vol) {
     const c = this.ctx;
     const src = c.createBufferSource();
-    src.buffer = this.noise;
+    src.buffer = this.noiseBuf;
     src.playbackRate.value = 0.9 + Math.random() * 0.25;
     const f = c.createBiquadFilter();
     f.type = filter;
@@ -149,6 +153,70 @@ export class Sfx {
     o.stop(at + len + 0.02);
   }
 
+  // ---------- 給 sounds.js 組合音效用的兩種基本聲音 ----------
+  // 濾波雜訊：f0 → f1 掃頻，attack 秒湧起、decay 秒消失；delay 延後幾秒再響
+  noise({ delay = 0, filter = 'lowpass', f0, f1 = f0, q = 1, attack = 0.005, decay, gain }) {
+    const c = this.ctx;
+    const at = c.currentTime + delay;
+    const src = c.createBufferSource();
+    src.buffer = this.noiseBuf;
+    const f = c.createBiquadFilter();
+    f.type = filter;
+    f.Q.value = q;
+    f.frequency.setValueAtTime(f0, at);
+    if (f1 !== f0) f.frequency.exponentialRampToValueAtTime(f1, at + attack + decay);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(gain, at + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + attack + decay);
+    src.connect(f).connect(g).connect(this.out);
+    const len = attack + decay + 0.05;
+    src.start(at, Math.random() * Math.max(0, 2 - len), len);
+  }
+
+  // 音調：f0 → f1 滑音；vib 是顫音的幅度（相對音高）
+  tone({ delay = 0, type = 'sine', f0, f1 = f0, attack = 0.005, decay, gain, vib = 0, vibRate = 7 }) {
+    const c = this.ctx;
+    const at = c.currentTime + delay;
+    const o = c.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, at);
+    if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, at + attack + decay);
+    if (vib) {
+      const lfo = c.createOscillator();
+      const lg = c.createGain();
+      lfo.frequency.value = vibRate;
+      lg.gain.value = f0 * vib;
+      lfo.connect(lg).connect(o.frequency);
+      lfo.start(at);
+      lfo.stop(at + attack + decay + 0.05);
+    }
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(gain, at + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + attack + decay);
+    o.connect(g).connect(this.out);
+    o.start(at);
+    o.stop(at + attack + decay + 0.05);
+  }
+
+  // 播放 sounds.js 裡的音效；vol 已含距離衰減
+  play(name, vol = 1) {
+    if (!this.ready || vol < 0.03) return;
+    const recipe = SOUNDS[name];
+    if (!recipe) return;
+    // 同一種聲音太密集時（例如五發火球同時爆炸）只響一次
+    const now = this.ctx.currentTime;
+    if (now - (this.lastPlayed[name] ?? -1) < 0.04) return;
+    this.lastPlayed[name] = now;
+    const g = this.ctx.createGain();
+    g.gain.value = vol;
+    g.connect(this.master);
+    this.out = g;
+    recipe(this);
+    this.out = this.master;
+  }
+
   // 水花：開始時預先算好幾段不同的水花聲（makeSplash），每一步隨機挑一段播放
   splash(vol, big = false) {
     const c = this.ctx;
@@ -158,7 +226,7 @@ export class Sfx {
     src.playbackRate.value = 0.9 + Math.random() * 0.2;
     const g = c.createGain();
     g.gain.value = 0.8 * vol;
-    src.connect(g).connect(this.master);
+    src.connect(g).connect(this.out);
     src.start();
   }
 

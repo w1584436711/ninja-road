@@ -92,6 +92,7 @@ export function performJutsu(pc, def, mul) {
           if (diff > Math.PI) diff = Math.PI * 2 - diff;
           if (d < def.range && diff < def.angle) c.hitEnemy(e, dmg(def.dmg), p.pos, def.kb);
         }
+        c.sound(def.visual === 'water' ? 'water' : 'wind');
         const f = pc.forward(face).clone();
         for (let k = 0; k < 3; k++) {
           c.schedule(k * 0.06, () => c.projectiles.spawn({

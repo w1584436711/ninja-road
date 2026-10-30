@@ -34,6 +34,7 @@ class Clone {
   poof() {
     if (this.dead) return;
     this.dead = true;
+    this.c.sound('poof', this.pos);
     this.c.effects.smoke(new THREE.Vector3(this.pos.x, this.pos.y + 1, this.pos.z), 12, 0xf4f4f4, 0.45);
     this.c.scene.remove(this.model.root);
   }
@@ -147,6 +148,14 @@ export class Combat {
     this.player.onNotice(msg);
   }
 
+  // 音效：離玩家越遠越小聲（pos 省略就是玩家自己發出的）
+  sound(name, pos) {
+    if (!this.sfx) return;
+    let vol = 1;
+    if (pos) vol = clamp(1 - pos.distanceTo(this.player.pos) / 50, 0, 1) ** 1.5;
+    this.sfx.play(name, vol);
+  }
+
   // 命中停頓：打中的瞬間時間幾乎靜止，打擊感更強
   timeScale(dt) {
     if (this.hitStop > 0) {
@@ -174,6 +183,8 @@ export class Combat {
       this.recentTimer = 4;
     }
     if (result === 'hit' || result === 'killed') {
+      this.sound(kb >= 8 ? 'hitHeavy' : 'hit', e.pos);
+      if (result === 'killed') this.schedule(0.35, () => this.sound('down', e.pos));
       this.effects.ring(new THREE.Vector3(e.pos.x, e.pos.y + e.def.height * 0.6, e.pos.z), 0xfff2c0, 1.2, 0.25);
     }
     return result;
@@ -196,6 +207,7 @@ export class Combat {
     const len = Math.hypot(dx, dz) || 1;
     p.vel.x = (dx / len) * 7;
     p.vel.z = (dz / len) * 7;
+    this.sound('hurt');
     this.floatText.spawn(`-${dmg}`, new THREE.Vector3(p.pos.x, p.pos.y + 1.6, p.pos.z), 'hurt');
     this.hud.flashHurt();
     this.camCtl.shake = 0.3;
@@ -209,6 +221,7 @@ export class Combat {
 
   explode(pos, radius, dmg, owner, kind = 'fire') {
     const ground = new THREE.Vector3(pos.x, Math.max(pos.y - 0.5, getTerrainHeight(pos.x, pos.z) + 0.1), pos.z);
+    this.sound(kind === 'water' ? 'water' : 'explosion', pos);
     if (kind === 'water') {
       this.effects.smoke(pos, 16, 0xbfe6ff, 0.6, 2.5);
       this.effects.ring(ground, 0x5ab8ff, radius, 0.5);
@@ -236,6 +249,7 @@ export class Combat {
   burstFx(pos, radius, kind) {
     const color = { wind: 0xd8fff4, earth: 0x9a7a52 }[kind] ?? 0xffffff;
     const ground = new THREE.Vector3(pos.x, pos.y + 0.1, pos.z);
+    this.sound(kind === 'earth' ? 'rock' : 'wind', pos);
     this.effects.ring(ground, color, radius, 0.6);
     this.effects.ring(ground, color, radius * 0.6, 0.45);
     for (let i = 0; i < 16; i++) {
@@ -273,6 +287,7 @@ export class Combat {
       this.effects.ring(ground, kind === 'thunder' ? 0xfff2a0 : 0xc49a6a, radius, 0.4);
       return;
     }
+    this.sound(kind === 'thunder' ? 'thunder' : 'rock', point);
     if (kind === 'thunder') {
       const bolt = new THREE.Mesh(this.boltGeo, new THREE.MeshBasicMaterial({
         color: 0xfffbe0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -309,7 +324,10 @@ export class Combat {
     if (d.gold) {
       const g = d.gold[0] + Math.floor(Math.random() * (d.gold[1] - d.gold[0] + 1));
       this.progress.addGold(g);
-      this.schedule(0.25, () => this.floatText.spawn(`+${g} 兩`, top, 'gold'));
+      this.schedule(0.25, () => {
+        this.floatText.spawn(`+${g} 兩`, top, 'gold');
+        this.sound('coin');
+      });
     }
   }
 
@@ -319,11 +337,13 @@ export class Combat {
     mesh.castShadow = true;
     this.scene.add(mesh);
     this.logs.push({ mesh, t: 0 });
+    this.sound('poof', pos);
     this.effects.smoke(new THREE.Vector3(pos.x, pos.y + 1, pos.z), 12, 0xf4f4f4, 0.45);
   }
 
   spawnClones() {
     const p = this.player;
+    this.sound('poof');
     for (const side of [-1, 1]) {
       const pos = new THREE.Vector3(p.pos.x + Math.cos(p.facing) * side * 1.6, p.pos.y, p.pos.z - Math.sin(p.facing) * side * 1.6);
       this.effects.smoke(new THREE.Vector3(pos.x, pos.y + 1, pos.z), 12, 0xf4f4f4, 0.45);
