@@ -13,8 +13,9 @@ const SURFACES = {
 };
 
 // 一段水花聲。真實的水聲主要來自水裡被打進去的無數小氣泡：每顆氣泡像小鈴一樣
-// 發出很短的音、音高邊響邊往上飄（氣泡越小音越高、消失越快）。再疊上腳踩下去的
-// 低沉「噗」和濺起的細碎水沫。
+// 發出很短的音、音高邊響邊往上飄（氣泡越小音越高、消失越快）。再疊上水被撥開的
+// 「唰」和濺起的細碎水沫。
+// 不要放低頻的短促悶響：那種聲音聽起來像敲桌子，不像水。
 function makeSplash(ctx, big) {
   const sr = ctx.sampleRate;
   const len = big ? 0.75 : 0.42;
@@ -23,16 +24,17 @@ function makeSplash(ctx, big) {
   const out = buf.getChannelData(0);
   const rnd = Math.random;
 
-  // 1. 踩水的「噗」：低通雜訊，濾波頻率先高後低，起音約 10 毫秒（不會像敲擊）
-  let lp1 = 0, lp2 = 0;
+  // 1. 「唰」：去掉低頻的雜訊（約 900 Hz 以上），慢慢湧起、慢慢消散
+  let lp = 0, hp1 = 0, prev1 = 0;
+  const lpA = 1 - Math.exp((-2 * Math.PI * 5000) / sr);
+  const hp1A = Math.exp((-2 * Math.PI * 900) / sr);
   for (let i = 0; i < n; i++) {
     const t = i / sr;
-    const env = (1 - Math.exp(-t / 0.01)) * Math.exp(-t / (big ? 0.11 : 0.06));
-    const fc = 250 + (big ? 1100 : 1500) * Math.exp(-t / 0.04);
-    const a = 1 - Math.exp((-2 * Math.PI * fc) / sr);
-    lp1 += a * (rnd() * 2 - 1 - lp1);
-    lp2 += a * (lp1 - lp2);
-    out[i] += lp2 * env * 1.6;
+    lp += lpA * (rnd() * 2 - 1 - lp);
+    hp1 = hp1A * (hp1 + lp - prev1);
+    prev1 = lp;
+    const env = (1 - Math.exp(-t / 0.025)) * Math.exp(-t / (big ? 0.16 : 0.09));
+    out[i] += hp1 * env * 0.7;
   }
 
   // 2. 水沫：高頻雜訊切成很多細碎顆粒，密度隨時間變稀
@@ -52,10 +54,10 @@ function makeSplash(ctx, big) {
   const bubbles = big ? 90 : 40;
   for (let b = 0; b < bubbles; b++) {
     const t0 = 0.008 + Math.pow(rnd(), 2.2) * len * 0.75;
-    const f0 = 700 + Math.pow(rnd(), 1.6) * 3800;
+    const f0 = 1400 + Math.pow(rnd(), 1.4) * 3600; // 低於 1400 Hz 的氣泡聽起來像敲木頭
     const damp = 0.043 * f0 + 0.0014 * Math.pow(f0, 1.5); // 氣泡的衰減率（每秒）
     const rise = 0.1 + rnd() * 0.15; // 音高上飄的程度
-    const amp = (0.04 + rnd() * 0.08) * Math.exp(-t0 / 0.18) * (900 / f0) ** 0.5;
+    const amp = (0.03 + rnd() * 0.06) * Math.exp(-t0 / 0.18) * (1400 / f0) ** 0.5;
     const start = Math.floor(t0 * sr);
     const dur = Math.min(n - start, Math.floor((5 / damp) * sr));
     let phase = rnd() * Math.PI * 2;
