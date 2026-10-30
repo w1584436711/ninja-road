@@ -3,11 +3,16 @@
 
 const STEP = 0.7;
 const BODY_HEIGHT = 1.8;
+// 圓柱數量很多（每棵樹一個），依位置分到 20 公尺的格子裡，查詢時只看附近的格子
+const CELL = 20;
+const MARGIN = 1; // 查詢的角色半徑上限
+const key = (i, j) => i * 100003 + j;
 
 export class CollisionWorld {
   constructor() {
     this.boxes = [];
-    this.circles = [];
+    this.cells = new Map();
+    this.none = [];
   }
 
   addBox(cx, cz, w, d, top, bottom = -Infinity) {
@@ -15,7 +20,30 @@ export class CollisionWorld {
   }
 
   addCircle(x, z, r, top = Infinity, bottom = -Infinity) {
-    this.circles.push({ x, z, r, top, bottom });
+    const c = { x, z, r, top, bottom };
+    const reach = r + MARGIN;
+    for (let i = Math.floor((x - reach) / CELL); i <= Math.floor((x + reach) / CELL); i++) {
+      for (let j = Math.floor((z - reach) / CELL); j <= Math.floor((z + reach) / CELL); j++) {
+        const k = key(i, j);
+        if (!this.cells.has(k)) this.cells.set(k, []);
+        this.cells.get(k).push(c);
+      }
+    }
+  }
+
+  circlesNear(x, z) {
+    return this.cells.get(key(Math.floor(x / CELL), Math.floor(z / CELL))) ?? this.none;
+  }
+
+  // 範圍內的所有圓柱（不重複）
+  circlesInBox(minX, minZ, maxX, maxZ) {
+    const out = new Set();
+    for (let i = Math.floor(minX / CELL); i <= Math.floor(maxX / CELL); i++) {
+      for (let j = Math.floor(minZ / CELL); j <= Math.floor(maxZ / CELL); j++) {
+        for (const c of this.cells.get(key(i, j)) ?? this.none) out.add(c);
+      }
+    }
+    return out;
   }
 
   // 傳回 (x,z) 處、位於 y 下方最高的可站立表面
@@ -24,7 +52,7 @@ export class CollisionWorld {
     for (const b of this.boxes) {
       if (b.top > f && y >= b.top - STEP && x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ) f = b.top;
     }
-    for (const c of this.circles) {
+    for (const c of this.circlesNear(x, z)) {
       if (c.top !== Infinity && c.top > f && y >= c.top - STEP) {
         const dx = x - c.x, dz = z - c.z;
         if (dx * dx + dz * dz < c.r * c.r) f = c.top;
@@ -61,7 +89,7 @@ export class CollisionWorld {
         pos.z += opts[0][1];
       }
     }
-    for (const c of this.circles) {
+    for (const c of this.circlesNear(pos.x, pos.z)) {
       if (pos.y >= c.top - STEP || pos.y + BODY_HEIGHT <= c.bottom) continue;
       const dx = pos.x - c.x, dz = pos.z - c.z;
       const min = c.r + r;

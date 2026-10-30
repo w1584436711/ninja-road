@@ -22,6 +22,12 @@ export const THEME = {
     forest: { name: '幽冥森林', sub: 'Forest of Shadows' },
     outskirts: { name: '蒼穹之國・郊外', sub: 'Land of Azure Sky' },
     mountains: { name: '蒼穹之國・山岳地帶', sub: 'Mountains' },
+    canyon: { name: '蒼龍峽', sub: 'Soryu Gorge' },
+    falls: { name: '霧鳴瀑布', sub: 'Kirinari Falls' },
+    highlands: { name: '雲上高原', sub: 'Cloudtop Highlands' },
+    coast: { name: '潮見海岸', sub: 'Shiomi Coast' },
+    westwood: { name: '古樹之森', sub: 'Ancient Woods' },
+    eastplain: { name: '東方原野', sub: 'Eastern Plains' },
   },
 
   signs: { tower: '風', gate: '風鈴', shop: '鈴屋', toolshop: '忍具' },
@@ -55,7 +61,10 @@ export const THEME = {
   seals: ['寅', '巳', '未', '辰'],
   natures: { fire: '火', wind: '風', lightning: '雷', water: '水', earth: '土' },
 
-  enemies: { wolf: '野狼', bandit: '山賊', rogue: '流浪忍者', dummy: '訓練木樁', wolfking: '狼王', crow: '黑鴉' },
+  enemies: {
+    wolf: '野狼', bandit: '山賊', rogue: '流浪忍者', dummy: '訓練木樁', wolfking: '狼王', crow: '黑鴉',
+    pirate: '海賊', cliffBandit: '崖山賊', direWolf: '魔狼',
+  },
 };
 
 function merge(target, src) {

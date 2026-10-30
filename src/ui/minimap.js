@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { getTerrainHeight, terrainColor, WORLD_SIZE, HALF } from '../world/terrain.js';
+import { heightGrid, terrainColor, GRID_N, GRID_CELL, WORLD_SIZE, HALF } from '../world/terrain.js';
 import { TOWER_POS } from '../world/village.js';
 
-const RES = 400; // 地圖底圖解析度（像素）
+const RES = GRID_N; // 地圖底圖：地形格點一點一像素（約 3 公尺）
+const SCALE = (RES - 1) / WORLD_SIZE; // 公尺 → 像素
 const VIEW = 220; // 小地圖顯示範圍（公尺）
 
 export class Minimap {
@@ -14,12 +15,13 @@ export class Minimap {
     const g = this.base.getContext('2d');
     const img = g.createImageData(RES, RES);
     const c = new THREE.Color();
-    const cell = WORLD_SIZE / RES;
+    const grid = heightGrid();
+    const cell = GRID_CELL;
     for (let j = 0; j < RES; j++) {
       for (let i = 0; i < RES; i++) {
-        const x = -HALF + (i + 0.5) * cell, z = -HALF + (j + 0.5) * cell;
-        const h = getTerrainHeight(x, z);
-        const slope = Math.min(1, Math.abs(getTerrainHeight(x + cell, z) - h) / cell);
+        const x = -HALF + i * cell, z = -HALF + j * cell;
+        const h = grid[j * RES + i];
+        const slope = Math.min(1, Math.abs(grid[j * RES + Math.min(i + 1, RES - 1)] - h) / cell);
         if (h < 0) c.setHex(0x2f8fd0).lerp(new THREE.Color(0x1a5c94), Math.min(1, -h / 4));
         else terrainColor(x, z, h, slope * 0.6, c);
         const k = (j * RES + i) * 4;
@@ -31,7 +33,7 @@ export class Minimap {
     }
     g.putImageData(img, 0, 0);
 
-    const s = RES / WORLD_SIZE;
+    const s = SCALE;
     g.fillStyle = '#7a4a34';
     for (const hs of houses) g.fillRect((hs.x - hs.w / 2 + HALF) * s, (hs.z - hs.d / 2 + HALF) * s, hs.w * s, hs.d * s);
     g.fillStyle = '#c4502f';
@@ -43,7 +45,7 @@ export class Minimap {
   draw(player, combat) {
     const { ctx, canvas } = this;
     const W = canvas.width, H = canvas.height;
-    const s = RES / WORLD_SIZE;
+    const s = SCALE;
     const src = VIEW * s;
     ctx.fillStyle = '#0d1320';
     ctx.fillRect(0, 0, W, H);

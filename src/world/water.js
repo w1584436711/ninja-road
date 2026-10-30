@@ -1,22 +1,20 @@
 import * as THREE from 'three';
 import { clamp } from '../core/math.js';
 import { sharedTime } from '../render/wind.js';
-import { getTerrainHeight, WORLD_SIZE, HALF, WATER_LEVEL } from './terrain.js';
+import { heightGrid, GRID_N, WORLD_SIZE, WATER_LEVEL } from './terrain.js';
 
 // 動畫風水面：深淺色、岸邊白色浪花、卡通波光、緩慢波浪
-const DEPTH_RES = 256;
 const MAX_DEPTH = 6;
+// 水面比世界大很多，南方的海才會一路延伸到地平線
+const PLANE_SIZE = WORLD_SIZE * 3;
 
+// 水深圖：直接用地形的高度格點（格點落在貼圖像素中心，所以 UV 要內縮半格）
 function depthTexture() {
-  const data = new Uint8Array(DEPTH_RES * DEPTH_RES);
-  const cell = WORLD_SIZE / DEPTH_RES;
-  for (let j = 0; j < DEPTH_RES; j++) {
-    for (let i = 0; i < DEPTH_RES; i++) {
-      const h = getTerrainHeight(-HALF + (i + 0.5) * cell, -HALF + (j + 0.5) * cell);
-      data[j * DEPTH_RES + i] = clamp((WATER_LEVEL - h) / MAX_DEPTH, 0, 1) * 255;
-    }
-  }
-  const tex = new THREE.DataTexture(data, DEPTH_RES, DEPTH_RES, THREE.RedFormat);
+  const grid = heightGrid();
+  const data = new Uint8Array(GRID_N * GRID_N);
+  for (let k = 0; k < data.length; k++) data[k] = clamp((WATER_LEVEL - grid[k]) / MAX_DEPTH, 0, 1) * 255;
+  const tex = new THREE.DataTexture(data, GRID_N, GRID_N, THREE.RedFormat);
+  tex.unpackAlignment = 1; // 513 像素寬，每列不是 4 的倍數
   tex.magFilter = tex.minFilter = THREE.LinearFilter;
   tex.needsUpdate = true;
   return tex;
@@ -41,6 +39,7 @@ const fragmentShader = /* glsl */`
   uniform sampler2D depthTex;
   uniform float uTime;
   uniform float worldSize;
+  uniform float gridN;
   uniform vec3 shallow;
   uniform vec3 deep;
   uniform vec3 foam;
@@ -56,7 +55,8 @@ const fragmentShader = /* glsl */`
   }
 
   void main() {
-    float depth = texture2D(depthTex, vW.xz / worldSize + 0.5).r;
+    vec2 duv = (vW.xz / worldSize + 0.5) * (gridN - 1.0) / gridN + 0.5 / gridN;
+    float depth = texture2D(depthTex, duv).r;
     vec3 col = mix(shallow, deep, smoothstep(0.02, 0.5, depth));
 
     // 卡通水紋：雜訊取門檻變成一塊塊亮色
@@ -89,10 +89,11 @@ const fragmentShader = /* glsl */`
 
 // sunDir、tint 直接引用天空的物件，天空更新時水面自動跟著變
 export function createWater(sunDir, tint) {
-  const geo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, 160, 160);
+  const geo = new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE, 240, 240);
   geo.rotateX(-Math.PI / 2);
   const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
     worldSize: { value: WORLD_SIZE },
+    gridN: { value: GRID_N },
     shallow: { value: new THREE.Color(0x4fc7d9) },
     deep: { value: new THREE.Color(0x1d5fae) },
     foam: { value: new THREE.Color(0xf4fbff) },

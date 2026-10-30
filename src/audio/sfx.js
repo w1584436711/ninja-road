@@ -1,6 +1,7 @@
 // 用 Web Audio 即時合成的音效（不需要音檔）：腳步聲依地面材質不同，以及落地、水花。
 // 瀏覽器規定要使用者操作後才能出聲，所以在按下「開始」時呼叫 unlock()。
 import { SOUNDS } from './sounds.js';
+import { Ambience } from './ambience.js';
 
 const STORAGE_KEY = 'ninja-road.sound';
 
@@ -110,8 +111,15 @@ export class Sfx {
         small: Array.from({ length: 6 }, () => makeSplash(c, false)),
         big: Array.from({ length: 3 }, () => makeSplash(c, true)),
       };
+      this.ambience = new Ambience(c, this.master);
     }
     this.ctx.resume?.();
+  }
+
+  // 環境音音量（0..1）；關閉音效時全部靜音
+  setAmbience(levels) {
+    if (!this.ambience) return;
+    this.ambience.setLevels(this.enabled ? levels : {});
   }
 
   toggle() {

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { lerpAngle, clamp, lerp } from '../core/math.js';
 import { createNameplate } from '../core/textures.js';
 import { createCharacter, animateCharacter, advancePhase } from './character.js';
-import { getTerrainHeight, WATER_LEVEL, HALF, isRoad, VILLAGE_RADIUS } from '../world/terrain.js';
+import { getTerrainHeight, WATER_LEVEL, HALF, isRoad, inStream, VILLAGE_RADIUS } from '../world/terrain.js';
 import { THEME } from '../data/theme.js';
 
 const GRAVITY = 32;
@@ -82,6 +82,7 @@ export class Player {
 
   // 地面材質：村裡鋪石板的路、野外泥土路、沙灘、草地
   surfaceAt(x, z, h) {
+    if (inStream(x, z)) return 'water'; // 高原的淺溪
     if (h < 0.8) return 'sand';
     if (isRoad(x, z)) return Math.hypot(x, z) < VILLAGE_RADIUS ? 'stone' : 'dirt';
     return 'grass';

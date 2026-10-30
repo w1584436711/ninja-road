@@ -1,13 +1,15 @@
 import * as THREE from 'three';
 import { Input } from './core/input.js';
 import { CollisionWorld } from './world/colliders.js';
-import { createTerrain } from './world/terrain.js';
+import { Terrain } from './world/terrain.js';
 import { createWater } from './world/water.js';
 import { Grass } from './world/grass.js';
 import { sharedTime } from './render/wind.js';
 import { Sky, HORIZON_COLOR } from './world/sky.js';
 import { createVillage } from './world/village.js';
-import { createNature } from './world/nature.js';
+import { Nature } from './world/nature.js';
+import { Falls } from './world/falls.js';
+import { Waystations, waystationName } from './world/waystations.js';
 import { Effects } from './fx/effects.js';
 import { Player } from './player/player.js';
 import { ThirdPersonCamera } from './player/camera.js';
@@ -25,10 +27,11 @@ import { Progression } from './progress/progression.js';
 import { RAMEN_PRICE } from './progress/items.js';
 import { Menu } from './ui/menu.js';
 import { STALLS, QUEST_BOARD } from './world/village.js';
-import { getTerrainHeight, getAreaKey } from './world/terrain.js';
+import { getTerrainHeight, getAreaKey, riverX, FALLS_X, FALLS_Z, SPRING_Z, ROAD_END_Z } from './world/terrain.js';
 import { QuestLog } from './quests/quests.js';
 import { TownNpcs, TIPS, leaderScript, travelerScript } from './npc/townNpcs.js';
 import { Dialogue } from './ui/dialogue.js';
+import { WorldMap } from './ui/worldmap.js';
 import { Streets } from './world/streets.js';
 import { Sfx } from './audio/sfx.js';
 import { THEME } from './data/theme.js';
@@ -55,14 +58,17 @@ const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.3, 10
 
 // ---------- 世界 ----------
 const world = new CollisionWorld();
-scene.add(createTerrain());
+const terrain = new Terrain(scene); // 分區塊、遠近不同精細度
 const sky = new Sky(scene, quality, sharedTime);
 scene.add(createWater(sky.sunDir, sky.waterTint));
 if (quality.shadows) sky.sun.shadow.mapSize.set(quality.shadowSize, quality.shadowSize);
 const village = createVillage(world);
 scene.add(village.group);
 const streets = new Streets(scene, world); // 石板路、廣場、路邊雜物、燈籠串、櫻花
-scene.add(createNature(world));
+const nature = new Nature(world);
+scene.add(nature.group);
+const falls = new Falls(scene, sky); // 霧鳴瀑布與高原的溪
+const waystations = new Waystations(scene, world); // 驛站（傳送點）
 
 const effects = new Effects(scene);
 const player = new Player(scene, world, effects, { x: 0, z: 40 });
@@ -73,13 +79,15 @@ const input = new Input(canvas);
 
 // ---------- 成長與存檔 ----------
 const progress = new Progression(player);
+progress.flags.waystations ??= ['village']; // 村子的驛站一開始就能用
 if (progress.pos) {
   const [x, z] = progress.pos;
   player.pos.set(x, Math.max(getTerrainHeight(x, z), 0), z);
 }
 if (progress.hour !== null) sky.hour = progress.hour;
 
-const hud = new HUD(new Minimap(document.getElementById('minimap'), village.houses), progress);
+const minimap = new Minimap(document.getElementById('minimap'), village.houses);
+const hud = new HUD(minimap, progress);
 player.onNotice = msg => hud.toast(msg);
 
 // ---------- 音效 ----------
@@ -135,7 +143,8 @@ const townNpcs = new TownNpcs(scene);
 const menu = new Menu(progress, player, hud);
 menu.quests = quests;
 const dialogue = new Dialogue();
-const uiOpen = () => menu.isOpen || dialogue.isOpen;
+const worldMap = new WorldMap(minimap.base);
+const uiOpen = () => menu.isOpen || dialogue.isOpen || worldMap.isOpen;
 
 function openUi(show) {
   if (!playing || uiOpen()) return;
@@ -151,7 +160,13 @@ function onUiClosed() {
 }
 menu.onClose = onUiClosed;
 dialogue.onClose = onUiClosed;
+worldMap.onClose = onUiClosed;
 const openMenu = () => openUi(() => menu.open());
+const openMap = () => openUi(() => worldMap.open(player, combat.enemies.list, waystations.list, progress.flags.waystations));
+document.getElementById('minimap').addEventListener('pointerdown', e => {
+  e.stopPropagation();
+  openMap();
+});
 
 for (const id of ['menuBtn', 'menuBtn2']) {
   document.getElementById(id).addEventListener('pointerdown', e => {
@@ -199,6 +214,9 @@ function interactables() {
       act: () => (s.key === 'shop' ? openUi(() => menu.openShop()) : eatRamen()),
     })),
     { x: QUEST_BOARD.x, z: QUEST_BOARD.z + 1.8, r: 2.8, btn: '任', label: '查看任務板', act: () => openUi(() => menu.openBoard()) },
+    ...waystations.list.filter(s => progress.flags.waystations.includes(s.key)).map(s => ({
+      x: s.x, z: s.z, r: 3.2, btn: '驛', label: `使用${waystationName(s)}（傳送）`, act: () => travelMenu(s),
+    })),
     ...townNpcs.list.map(n => ({ x: n.pos.x, z: n.pos.z, r: 2.6, btn: '談', label: `和${n.name}說話`, act: () => talk(n.key) })),
     ...villagers.list.map(v => ({
       x: v.pos.x, z: v.pos.z, r: 2.2, btn: '談', label: `和${v.name}說話`,
@@ -226,6 +244,43 @@ function updateInteract() {
 function interact() {
   near?.act();
 }
+// ---------- 驛站傳送 ----------
+function travelMenu(from) {
+  const found = progress.flags.waystations;
+  const dests = waystations.list.filter(s => s !== from && found.includes(s.key));
+  if (!dests.length) {
+    openUi(() => dialogue.open(waystationName(from), ['還沒有發現其他驛站。到各地走走，碰到驛站的水晶就能登記。']));
+    return;
+  }
+  const options = dests.map(d => ({ label: waystationName(d), fn: () => travelTo(d) }));
+  options.push({ label: '不用了', fn: () => {} });
+  openUi(() => dialogue.open(waystationName(from), ['要傳送到哪裡？'], options));
+}
+
+function travelTo(dest) {
+  const smokeAt = p => effects.smoke(new THREE.Vector3(p.x, p.y + 1, p.z), 14, 0xf4f4f4, 0.5);
+  smokeAt(player.pos);
+  const x = dest.x + 2.4, z = dest.z + 2.4;
+  player.pos.set(x, getTerrainHeight(x, z), z);
+  player.vel.set(0, 0, 0);
+  camCtl.snapped = false;
+  smokeAt(player.pos);
+  sfx.play('poof');
+  hud.toast(`抵達${waystationName(dest)}`);
+  progress.save(sky.hour);
+}
+
+// 走到尚未發現的驛站旁邊：登記起來
+function checkWaystations() {
+  const found = progress.flags.waystations;
+  const s = waystations.newlyFound(player.pos, found);
+  if (!s) return;
+  found.push(s.key);
+  sfx.play('cast');
+  hud.toast(`發現「${waystationName(s)}」！之後在任何驛站都能傳送到這裡`);
+  progress.save(sky.hour);
+}
+
 function eatRamen() {
   if (progress.pay(RAMEN_PRICE)) {
     player.hp = player.maxHp;
@@ -296,6 +351,18 @@ addEventListener('resize', () => {
   post.setSize();
 });
 
+// 環境音：依離瀑布、河、海的距離決定音量（0..1）
+function ambienceAt(p) {
+  const fade = (d, range) => Math.max(0, 1 - d / range) ** 2;
+  const rx = Math.abs(p.x - riverX(p.z));
+  const river = p.z > FALLS_Z ? fade(Math.max(0, rx - 10), 70) : p.z > SPRING_Z ? fade(rx, 30) * 0.6 : 0;
+  return {
+    falls: fade(Math.hypot(p.x - FALLS_X, p.z - FALLS_Z - 6, Math.max(0, p.y - 40) * 0.5), 260),
+    river,
+    sea: fade(Math.max(0, ROAD_END_Z - 10 - p.z), 170),
+  };
+}
+
 // ---------- 主迴圈 ----------
 const clock = new THREE.Clock();
 function frame() {
@@ -306,6 +373,7 @@ function frame() {
   if (active) {
     if (input.pressed('KeyT')) sky.advanceHours(1);
     if (input.pressed('Tab')) openMenu();
+    if (input.pressed('KeyM')) openMap();
     if (input.pressed('KeyG')) interact();
     if (input.pressed('Digit5')) hud.toast(progress.useItem('potion'));
     if (input.pressed('Digit6')) hud.toast(progress.useItem('pill'));
@@ -314,6 +382,7 @@ function frame() {
     player.update(dt, input, camCtl.yaw);
     combat.update(dt);
     updateInteract();
+    checkWaystations();
     const area = getAreaKey(player.pos.x, player.pos.z);
     if (area !== lastArea) {
       lastArea = area;
@@ -344,6 +413,11 @@ function frame() {
   grass.update(player.pos);
   camCtl.update(realDt, player.pos);
   sky.update(dt, player.pos, camera.position);
+  terrain.update(camera.position, quality.fogFar);
+  nature.update(camera.position, quality.fogFar);
+  falls.update(dt, camera.position);
+  waystations.update(dt, progress.flags.waystations);
+  sfx.setAmbience(playing ? ambienceAt(player.pos) : {});
   if (playing) hud.update(realDt, player, sky, combat);
   input.endFrame();
   post.render();
@@ -351,7 +425,7 @@ function frame() {
 }
 requestAnimationFrame(frame);
 
-window.game = { scene, player, camCtl, world, renderer, input, hud, post, quality, grass, sharedTime, sky, combat, floatText, effects, progress, menu, quests, dialogue, townNpcs, streets, village, villagers, sfx, ui: { updateInteract, interact, openMenu, talk } };
+window.game = { scene, terrain, nature, falls, waystations, player, camCtl, world, renderer, input, hud, post, quality, grass, sharedTime, sky, combat, floatText, effects, progress, menu, quests, dialogue, townNpcs, streets, village, villagers, sfx, ui: { updateInteract, interact, openMenu, openMap, talk, checkWaystations, travelMenu, travelTo } };
 
 // 關閉或切到背景前存檔
 addEventListener('pagehide', () => progress.save(sky.hour));

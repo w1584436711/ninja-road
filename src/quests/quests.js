@@ -19,8 +19,18 @@ export const QUESTS = [
   { id: 'rogues', rank: 'B', level: 7, requires: 'bandits', title: '流浪忍者的情報', desc: '有流浪忍者在村子周圍刺探，擊敗 3 名，查出他們的目的。', repeatable: true,
     goals: [{ type: 'kill', target: 'rogue', count: 3 }], reward: { exp: 420, gold: 260 } },
   { id: 'crow', rank: 'A', level: 10, requires: 'rogues', title: '黑鴉', leaderOnly: true,
-    desc: '叛忍「黑鴉」偷走了村子的禁術卷軸，藏身在北方山區。打倒他，取回卷軸。',
+    desc: '叛忍「黑鴉」偷走了村子的禁術卷軸，藏身在北方蒼龍峽的入口。打倒他，取回卷軸。',
     goals: [{ type: 'kill', target: 'crow', count: 1 }], reward: { exp: 1200, gold: 600, gear: 'feather' } },
+
+  // ---------- 山脈外的地區 ----------
+  { id: 'coast', rank: 'C', level: 5, requires: 'bandits', title: '海岸的海賊', desc: '沿著南方道路走到底就是潮見海岸，那裡的海賊會搶漁村的貨，擊敗 4 名。', repeatable: true,
+    goals: [{ type: 'kill', target: 'pirate', count: 4 }], reward: { exp: 240, gold: 150 } },
+  { id: 'falls', rank: 'C', level: 6, title: '霧鳴瀑布的傳說', desc: '沿白鷺川往上游，穿過蒼龍峽，據說盡頭有一座終年霧氣瀰漫的大瀑布。去親眼看看。',
+    goals: [{ type: 'visit', area: 'canyon' }, { type: 'visit', area: 'falls' }], reward: { exp: 300, gold: 120, items: { pill: 2 } } },
+  { id: 'cliff', rank: 'B', level: 8, requires: 'falls', title: '峽谷的崖山賊', desc: '蒼龍峽的崖山賊會從遠處丟苦無，近身又揮大刀。擊敗 5 名，讓通往瀑布的路安全一點。', repeatable: true,
+    goals: [{ type: 'kill', target: 'cliffBandit', count: 5 }], reward: { exp: 560, gold: 300 } },
+  { id: 'direwolves', rank: 'B', level: 10, requires: 'wolfking', title: '古樹之森的魔狼', desc: '穿過西邊的山口，古樹之森裡住著比狼王手下更凶的魔狼群。討伐 6 隻。', repeatable: true,
+    goals: [{ type: 'kill', target: 'direWolf', count: 6 }], reward: { exp: 820, gold: 380 } },
 ];
 
 export const MAX_ACTIVE = 3;

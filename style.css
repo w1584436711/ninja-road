@@ -519,3 +519,12 @@ body.touch .keys { margin-top: 14px; font-size: 12px; gap: 4px 12px; }
   body.touch .panel h1 { font-size: 28px; }
   body.touch .keys { margin-top: 10px; font-size: 11px; }
 }
+
+/* 大地圖 */
+#worldmap {
+  position: fixed; inset: 0; z-index: 12; display: grid; place-items: center; align-content: center; gap: 6px;
+  background: rgba(5, 8, 15, .7); cursor: pointer;
+}
+#worldmap canvas { border: 3px solid #ffd27a; border-radius: 8px; box-shadow: 0 8px 32px rgba(0, 0, 0, .6); max-width: 100%; }
+#worldmap .wm-hint { color: #ffd27a; font-size: 13px; text-shadow: 0 1px 3px #000; }
+#minimap { pointer-events: auto; cursor: pointer; }

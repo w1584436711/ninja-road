@@ -4,7 +4,7 @@ import { createNameplate } from '../core/textures.js';
 import { createCharacter, animateCharacter, advancePhase } from '../player/character.js';
 import { createWolf, animateWolf } from './wolf.js';
 import { toonify } from '../render/toon.js';
-import { getTerrainHeight, VILLAGE_RADIUS } from '../world/terrain.js';
+import { getTerrainHeight, riverX, VILLAGE_RADIUS } from '../world/terrain.js';
 import { THEME } from '../data/theme.js';
 
 // 敵人種類。windup = 出手前的預備時間（看到發紅就該閃）
@@ -25,6 +25,26 @@ export const ENEMY_TYPES = {
     look: { jacket: 0x2a2a34, pants: 0x1e1e26, shoulders: 0x5a1f2a, hair: 0x9aa0a8, spiky: true, band: true, scarf: 0x5a1f2a },
   },
   dummy: { level: 1, hp: 500, radius: 0.45, height: 1.7, exp: 0, model: 'dummy', dummy: true },
+
+  // ---------- 山脈外的地區 ----------
+  // 海賊：潮見海岸，揮刀很重
+  pirate: {
+    level: 6, hp: 120, radius: 0.45, height: 1.8, walk: 2, run: 7, sight: 15, range: 2.2,
+    damage: 15, windup: 0.5, recover: 1.1, exp: 34, gold: [10, 18], model: 'human', attack: 'slash',
+    look: { jacket: 0x2a4a7a, pants: 0xd8d0c0, shoulders: 0x1a2a4a, hair: 0x6a3a1a, spiky: false, band: false, scarf: 0xc8a040, weapon: 'sword' },
+  },
+  // 崖山賊：蒼龍峽與雲上高原，近身揮刀、遠距離丟苦無
+  cliffBandit: {
+    level: 9, hp: 160, radius: 0.45, height: 1.8, walk: 2, run: 7, sight: 18, range: 2.2,
+    damage: 18, windup: 0.55, recover: 1.1, exp: 60, gold: [15, 25], model: 'human', attack: 'slash',
+    ranged: { min: 7, max: 18, cd: 3.2, damage: 14 },
+    look: { jacket: 0x8a3a2a, pants: 0x3a2a22, shoulders: 0x5a2a1a, hair: 0x1a1a1a, spiky: false, band: true, scarf: 0x8a3a2a, weapon: 'sword' },
+  },
+  // 魔狼：古樹之森，比野狼大一號、更快，成群行動
+  direWolf: {
+    level: 11, hp: 180, radius: 0.7, height: 1.15, scale: 1.2, color: 0x4a3a5a, walk: 3, run: 10.5, sight: 18, range: 2.1,
+    damage: 17, windup: 0.35, recover: 0.9, exp: 75, gold: [8, 14], model: 'wolf', pack: true,
+  },
 
   // ---------- 頭目 ----------
   // 狼王：體型大，會嚎叫召喚狼群
@@ -50,7 +70,15 @@ const SPAWNS = [
   ['rogue', 235, -150, 1], ['rogue', -80, -240, 1], ['rogue', 250, 210, 1],
   ['dummy', -9, 120, 1], ['dummy', 0, 126, 1], ['dummy', 9, 120, 1], // 大門外的訓練木樁
   ['wolfking', -285, 20, 1], // 幽冥森林深處
-  ['crow', 150, -262, 1], // 北方山區
+  ['crow', 150, -262, 1], // 蒼龍峽入口
+
+  // 山脈外的地區
+  ['bandit', 30, 420, 2], // 南方山口
+  ['pirate', -120, 640, 2], ['pirate', 160, 630, 2], ['pirate', 60, 590, 2], // 潮見海岸
+  ['cliffBandit', riverX(-330) - 18, -330, 2], ['cliffBandit', riverX(-450) + 20, -450, 2], ['rogue', riverX(-520) - 15, -520, 1], // 蒼龍峽
+  ['cliffBandit', riverX(-680) - 60, -680, 2], ['rogue', riverX(-700) + 70, -700, 2], ['direWolf', -200, -640, 3], ['cliffBandit', 350, -650, 2], // 雲上高原
+  ['direWolf', -560, -120, 3], ['direWolf', -600, 150, 3], ['direWolf', -520, 320, 2], // 古樹之森
+  ['bandit', 520, 60, 3], ['wolf', 560, -200, 3], ['cliffBandit', 520, 300, 2], // 東方原野
 ];
 
 const RESPAWN_TIME = 45;
@@ -510,7 +538,7 @@ export class EnemyManager {
     for (let i = 0; i < 30; i++) {
       const px = x + (rng() - 0.5) * spread, pz = z + (rng() - 0.5) * spread;
       const h = getTerrainHeight(px, pz);
-      if (h > 0.6 && h < 45 && !this.world.insideAnyBox(px, pz, 1)) return new THREE.Vector3(px, h, pz);
+      if (h > 0.6 && h < 60 && !this.world.insideAnyBox(px, pz, 1)) return new THREE.Vector3(px, h, pz);
     }
     return new THREE.Vector3(x, getTerrainHeight(x, z), z);
   }
@@ -532,7 +560,12 @@ export class EnemyManager {
   }
 
   update(dt, ctx) {
-    for (const e of this.list) e.update(dt, ctx);
+    // 遠處閒晃中的敵人先暫停（地圖變大後敵人很多，不必每幀都算）
+    const p = ctx.player.pos;
+    for (const e of this.list) {
+      if (e.state === 'patrol' && Math.abs(e.pos.x - p.x) + Math.abs(e.pos.z - p.z) > 220) continue;
+      e.update(dt, ctx);
+    }
     // 移除已消失的召喚物
     for (let i = this.list.length - 1; i >= 0; i--) {
       if (this.list[i].removed) {

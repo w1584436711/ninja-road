@@ -27,7 +27,9 @@ export class ThirdPersonCamera {
     const ox = this.target.x, oz = this.target.z;
     const dx = Math.sin(this.yaw), dz = Math.cos(this.yaw);
     let best = hDist;
-    for (const c of this.world.circles) {
+    const ex = ox + dx * hDist, ez = oz + dz * hDist;
+    const near = this.world.circlesInBox(Math.min(ox, ex) - 4, Math.min(oz, ez) - 4, Math.max(ox, ex) + 4, Math.max(oz, ez) + 4);
+    for (const c of near) {
       if (c.top !== Infinity) continue;
       const rx = c.x - ox, rz = c.z - oz;
       const t = rx * dx + rz * dz; // 沿鏡頭方向的投影
