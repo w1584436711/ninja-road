@@ -20,12 +20,25 @@ const TYPES = [
 
 const ROAD_LEN = VILLAGE_RADIUS - 12;
 
-// 在村子裡閒逛的 NPC：大多沿著街道走，偶爾停下來
+// 各人的作息：幾點回家、幾點出門（小時）。中忍晚上提著燈籠巡邏，不回家
+const SCHEDULE = {
+  villager: [20, 6.5], student: [19, 7], shopOwner: [21, 6], child: [18.5, 7.5], chunin: null,
+};
+
+// 在村子裡閒逛的 NPC：大多沿著街道走，偶爾停下來。依時間回家、出門
 export class Villagers {
-  constructor(scene, world, count = 24) {
+  constructor(scene, world, count = 24, houses = []) {
     this.world = world;
     this.rng = mulberry32(99);
     this.list = [];
+    this.doors = houses.filter(h => h.front).map(h => {
+      const { x, z, nx, nz } = h.front;
+      return new THREE.Vector3(x + nx * 1.1, 0, z + nz * 1.1);
+    });
+    const lantern = new THREE.MeshStandardMaterial({ color: 0xffe2a8, emissive: 0xff9a3a, emissiveIntensity: 1 });
+    lantern.userData.glow = 'lantern';
+    const lanternGeo = new THREE.CylinderGeometry(0.11, 0.11, 0.24, 10);
+    const capGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.03, 8);
     for (let i = 0; i < count; i++) {
       const type = TYPES[i % TYPES.length];
       const scale = type.child ? 0.68 : 0.95 + this.rng() * 0.1;
@@ -38,8 +51,25 @@ export class Villagers {
       model.root.add(tag);
       scene.add(model.root);
       const pos = this.randomPoint();
+      const schedule = type.role in SCHEDULE ? SCHEDULE[type.role] : SCHEDULE.villager;
+      // 巡夜的人左手提燈籠（只在晚上看得到）
+      let lamp = null;
+      if (type.role === 'chunin') {
+        lamp = new THREE.Group();
+        lamp.position.y = -0.36;
+        const body = new THREE.Mesh(lanternGeo, lantern);
+        body.position.y = -0.14;
+        body.userData.glow = 'lantern';
+        const cap = new THREE.Mesh(capGeo, new THREE.MeshStandardMaterial({ color: 0x2a2018 }));
+        cap.position.y = -0.01;
+        lamp.add(body, cap);
+        lamp.visible = false;
+        model.elbowL.add(lamp);
+      }
       this.list.push({
-        name: THEME.npcs[type.role], model, pos, scale,
+        name: THEME.npcs[type.role], model, pos, scale, schedule, lamp, home: this.doors.length ? this.doors[Math.floor(this.rng() * this.doors.length)] : null,
+        // 傍晚各自隔幾分鐘才動身，不會整條街同時消失
+        delay: this.rng() * 0.8, inside: false, goingHome: false,
         target: this.randomPoint(), facing: this.rng() * 6, wait: this.rng() * 3, timer: 0, phase: 0, time: Math.random() * 10,
         // 大人散步 1.2–1.8 m/s；小孩跑來跑去
         speed: type.child ? 3.2 + this.rng() * 1.2 : 1.2 + this.rng() * 0.6, cur: 0,
@@ -65,8 +95,35 @@ export class Villagers {
     }
   }
 
-  update(dt) {
+  // 現在該不該在家（hour：0..24）
+  shouldBeHome(n, hour) {
+    if (!n.schedule || !n.home) return false;
+    const [out, back] = [n.schedule[0] + n.delay, n.schedule[1] + n.delay];
+    return hour >= out || hour < back;
+  }
+
+  update(dt, hour = 12) {
+    const night = hour >= 19 || hour < 6;
     for (const n of this.list) {
+      if (n.lamp) n.lamp.visible = night;
+      const home = this.shouldBeHome(n, hour);
+      if (n.inside) {
+        if (home) continue;
+        // 早上出門：從自家門口出來
+        n.inside = false;
+        n.goingHome = false;
+        n.pos.set(n.home.x, getTerrainHeight(n.home.x, n.home.z), n.home.z);
+        n.target = this.randomPoint();
+        n.timer = 0;
+        n.wait = 0;
+        n.model.root.visible = true;
+      }
+      if (home && !n.goingHome) {
+        n.goingHome = true;
+        n.target = new THREE.Vector3(n.home.x, getTerrainHeight(n.home.x, n.home.z), n.home.z);
+        n.wait = 0;
+        n.timer = 0;
+      }
       n.time += dt;
       n.timer += dt;
       let want = 0;
@@ -75,12 +132,20 @@ export class Villagers {
       } else {
         const dx = n.target.x - n.pos.x, dz = n.target.z - n.pos.z;
         const d = Math.hypot(dx, dz);
-        if (d < 1 || n.timer > 25) {
+        if (n.goingHome && (d < 0.9 || n.timer > 90)) {
+          // 進門
+          n.inside = true;
+          n.cur = 0;
+          n.model.root.visible = false;
+          continue;
+        }
+        if (!n.goingHome && (d < 1 || n.timer > 25)) {
           n.target = this.randomPoint();
           n.timer = 0;
           if (this.rng() < 0.45) n.wait = 2 + this.rng() * 5;
         } else {
-          want = n.speed;
+          // 回家的路上走快一點
+          want = n.goingHome ? n.speed * 1.25 : n.speed;
           n.facing = lerpAngle(n.facing, Math.atan2(dx, dz), 1 - Math.exp(-5 * dt));
         }
       }

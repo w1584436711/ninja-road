@@ -119,4 +119,19 @@ export const SOUNDS = {
     [523, 659, 784, 1047].forEach((f, i) => s.tone({ type: 'triangle', f0: f, attack: 0.01, decay: i === 3 ? 0.7 : 0.18, gain: 0.14, delay: i * 0.09 }));
     s.tone({ f0: 2093, attack: 0.01, decay: 0.8, gain: 0.04, delay: 0.27 });
   },
+
+  // ---------- 街頭 ----------
+  // 貓叫「喵～」：音高先往上再往下，帶一點顫音
+  meow: s => {
+    const f = r(650, 850);
+    s.tone({ type: 'triangle', f0: f, f1: f * 1.3, attack: 0.05, decay: 0.12, gain: 0.07, vib: 0.02, vibRate: 9 });
+    s.tone({ type: 'triangle', f0: f * 1.3, f1: f * 0.75, attack: 0.02, decay: 0.32, gain: 0.07, vib: 0.03, vibRate: 8, delay: 0.15 });
+    s.tone({ f0: f * 2.6, f1: f * 1.6, attack: 0.04, decay: 0.4, gain: 0.015, delay: 0.1 });
+  },
+  // 鳥群飛起來的拍翅聲
+  flutter: s => {
+    for (let i = 0; i < 9; i++) {
+      s.noise({ filter: 'bandpass', f0: r(1200, 2200), q: 1.2, attack: 0.008, decay: 0.03, gain: 0.25 * (1 - i / 12), delay: i * r(0.035, 0.05) });
+    }
+  },
 };

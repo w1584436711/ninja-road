@@ -31,6 +31,13 @@ export class Menu {
       const b = e.target.closest('[data-act]');
       if (b && !b.disabled) this.act(b.dataset.act, b.dataset.arg);
     });
+    // 音量滑桿：拖動時即時生效
+    this.body.addEventListener('input', e => {
+      const r = e.target.closest('input[data-vol]');
+      if (!r || !this.sfx) return;
+      this.sfx.setVolume(r.dataset.vol, r.value / 100);
+      r.nextElementSibling.textContent = r.value;
+    });
     // 選單內按 Tab / Esc 關閉
     addEventListener('keydown', e => {
       if (!this.isOpen) return;
@@ -253,7 +260,16 @@ export class Menu {
   }
 
   systemHtml() {
+    const vol = this.sfx?.volume ?? {};
+    const slider = (key, label) => {
+      const v = Math.round((vol[key] ?? 1) * 100);
+      return `<label class="vrow"><span>${label}</span><input type="range" min="0" max="100" step="5" value="${v}" data-vol="${key}" aria-label="${label}音量"><b>${v}</b></label>`;
+    };
     return `
+      <div class="mhead">音量</div>
+      ${slider('music', '背景音樂')}${slider('sfx', '音效')}${slider('ambience', '環境音')}
+      <p class="mnote">環境音包括瀑布、河流、海浪、風雨、鳥叫和蟲鳴。開始畫面的「音效」按鈕可以一次全部關掉。</p>
+      <div class="mhead">存檔</div>
       <p class="mnote">進度會自動存在這台裝置的瀏覽器裡（每 15 秒，以及升級、購買時）。換手機或清除瀏覽器資料後，進度不會保留。</p>
       <button class="mbtn danger" data-act="wipe">${this.wipeArmed ? '確定要刪除所有進度？再按一次' : '重新開始（刪除進度）'}</button>`;
   }

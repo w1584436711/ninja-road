@@ -167,7 +167,7 @@ function createHouse(group, world, rng, x, z, w, d) {
     group.add(board);
     sign = text;
   }
-  return { base, h, sign, front: { x: x + nx * halfN, z: z + nz * halfN, nx, nz } };
+  return { base, h, top, flat: top === base + h + 0.4, sign, front: { x: x + nx * halfN, z: z + nz * halfN, nx, nz } };
 }
 
 // 招牌與花

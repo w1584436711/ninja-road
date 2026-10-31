@@ -22,7 +22,7 @@ export function mergeByMaterial(group) {
     }
     const geos = meshes.map(m => {
       m.updateMatrix();
-      const g = (m.geometry.index ? m.geometry : m.geometry.toNonIndexed()).clone();
+      const g = m.geometry.clone();
       for (const k of Object.keys(g.attributes)) if (!KEEP.has(k)) g.deleteAttribute(k);
       g.clearGroups();
       return g.applyMatrix4(m.matrix);

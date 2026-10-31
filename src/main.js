@@ -14,6 +14,7 @@ import { Effects } from './fx/effects.js';
 import { Player } from './player/player.js';
 import { ThirdPersonCamera } from './player/camera.js';
 import { Villagers } from './npc/villagers.js';
+import { StreetLife } from './npc/streetLife.js';
 import { Minimap } from './ui/minimap.js';
 import { HUD } from './ui/hud.js';
 import { TouchControls, isTouchDevice } from './ui/touch.js';
@@ -27,6 +28,7 @@ import { Progression } from './progress/progression.js';
 import { RAMEN_PRICE } from './progress/items.js';
 import { Menu } from './ui/menu.js';
 import { STALLS, QUEST_BOARD } from './world/village.js';
+import { smoothstep } from './core/math.js';
 import { getTerrainHeight, getAreaKey, riverX, FALLS_X, FALLS_Z, SPRING_Z, ROAD_END_Z } from './world/terrain.js';
 import { QuestLog } from './quests/quests.js';
 import { TownNpcs, TIPS, leaderScript, travelerScript } from './npc/townNpcs.js';
@@ -72,7 +74,7 @@ const waystations = new Waystations(scene, world); // 驛站（傳送點）
 
 const effects = new Effects(scene);
 const player = new Player(scene, world, effects, { x: 0, z: 40 });
-const villagers = new Villagers(scene, world, { low: 10, medium: 16, high: 24 }[quality.key]);
+const villagers = new Villagers(scene, world, { low: 10, medium: 16, high: 24 }[quality.key], village.houses);
 const camCtl = new ThirdPersonCamera(camera);
 camCtl.world = world; // 鏡頭避開樹幹
 const input = new Input(canvas);
@@ -107,6 +109,7 @@ const touchControls = touch ? new TouchControls(input) : null;
 // 動畫風：全部轉賽璐璐材質，再由後製描邊
 toonify(scene);
 sky.refreshCloudMaterial();
+const streetLife = new StreetLife(scene, world, village.houses, sfx); // 貓狗、麻雀、晾衣服
 sky.collectGlow(scene);
 const post = new PostFX(renderer, scene, camera, quality);
 
@@ -142,6 +145,7 @@ const townNpcs = new TownNpcs(scene);
 // ---------- 選單、對話（開啟時遊戲暫停、放開滑鼠） ----------
 const menu = new Menu(progress, player, hud);
 menu.quests = quests;
+menu.sfx = sfx;
 const dialogue = new Dialogue();
 const worldMap = new WorldMap(minimap.base);
 const uiOpen = () => menu.isOpen || dialogue.isOpen || worldMap.isOpen;
@@ -218,7 +222,7 @@ function interactables() {
       x: s.x, z: s.z, r: 3.2, btn: '驛', label: `使用${waystationName(s)}（傳送）`, act: () => travelMenu(s),
     })),
     ...townNpcs.list.map(n => ({ x: n.pos.x, z: n.pos.z, r: 2.6, btn: '談', label: `和${n.name}說話`, act: () => talk(n.key) })),
-    ...villagers.list.map(v => ({
+    ...villagers.list.filter(v => !v.inside).map(v => ({
       x: v.pos.x, z: v.pos.z, r: 2.2, btn: '談', label: `和${v.name}說話`,
       act: () => openUi(() => dialogue.open(v.name, [TIPS[Math.floor(Math.random() * TIPS.length)]])),
     })),
@@ -356,17 +360,51 @@ function ambienceAt(p) {
   const fade = (d, range) => Math.max(0, 1 - d / range) ** 2;
   const rx = Math.abs(p.x - riverX(p.z));
   const river = p.z > FALLS_Z ? fade(Math.max(0, rx - 10), 70) : p.z > SPRING_Z ? fade(rx, 30) * 0.6 : 0;
+  const falls = fade(Math.hypot(p.x - FALLS_X, p.z - FALLS_Z - 6, Math.max(0, p.y - 40) * 0.5), 260);
+  const area = getAreaKey(p.x, p.z);
+  const inVillage = area === 'village';
+  const day = smoothstep(-0.08, 0.12, sky.sunDir.y);
+  const dry = 1 - sky.rain;
+  // 越高風越大；村子裡被房子擋住
+  const wind = Math.min(1, Math.max(0, (p.y - 20) / 35) + (area === 'highlands' ? 0.4 : 0) + (inVillage ? 0.05 : 0.15)) * (1 - falls * 0.6);
   return {
-    falls: fade(Math.hypot(p.x - FALLS_X, p.z - FALLS_Z - 6, Math.max(0, p.y - 40) * 0.5), 260),
-    river,
+    falls, river,
     sea: fade(Math.max(0, ROAD_END_Z - 10 - p.z), 170),
+    wind, rain: sky.rain,
+    crickets: (1 - day) * dry * (area === 'coast' ? 0.3 : 1) * (1 - falls),
+    birds: day * dry * (inVillage ? 0.5 : area === 'coast' || area === 'highlands' ? 0.4 : 1),
   };
+}
+
+// 背景音樂：戰鬥中（附近有敵人在追自己）→ 戰鬥曲；否則依地點與晝夜。
+// 離開戰鬥後多等幾秒才換回來，免得一直切換
+let battleHold = 0, bossFight = false;
+function musicMood(dt) {
+  const p = player.pos;
+  let fighting = false, boss = false;
+  for (const e of combat.enemies.list) {
+    if (!e.alive || e.def.dummy || e.state === 'patrol' || e.state === 'return') continue;
+    if (e.pos.distanceToSquared(p) > 45 * 45) continue;
+    fighting = true;
+    if (e.def.boss) boss = true;
+  }
+  if (fighting) {
+    battleHold = 6;
+    bossFight ||= boss;
+  } else if ((battleHold -= dt) <= 0) bossFight = false;
+  if (battleHold > 0 && !player.dead) return bossFight ? 'boss' : 'battle';
+  if (sky.isNight) return 'night';
+  return getAreaKey(p.x, p.z) === 'village' ? 'day' : 'wild';
 }
 
 // ---------- 主迴圈 ----------
 const clock = new THREE.Clock();
 function frame() {
-  const realDt = Math.min(clock.getDelta(), 0.05);
+  tick(Math.min(clock.getDelta(), 0.05));
+  requestAnimationFrame(frame);
+}
+// 一幀的更新與繪製（測試時也可以從 window.game.tick 手動推進）
+function tick(realDt) {
   const active = playing && !uiOpen(); // 選單、對話開著時遊戲暫停
   const dt = active ? combat.timeScale(realDt) : playing ? 0 : realDt; // 命中停頓時放慢
   sharedTime.value += dt;
@@ -395,12 +433,13 @@ function frame() {
   } else if (!playing) {
     camCtl.yaw += dt * 0.08; // 開始畫面時鏡頭緩慢環繞
   }
-  villagers.update(dt);
+  villagers.update(dt, sky.hour);
+  streetLife.update(dt, player, camera.position, sky.rain > 0.5 ? 0.9 : 0.45);
   townNpcs.update(dt, player, hasNews);
   streets.update(dt, sharedTime.value);
   // 太遠的角色不畫（在霧裡也看不清楚）
   const camPos = camera.position;
-  for (const v of villagers.list) v.model.root.visible = v.pos.distanceToSquared(camPos) < 90 * 90;
+  for (const v of villagers.list) v.model.root.visible = !v.inside && v.pos.distanceToSquared(camPos) < 90 * 90;
   for (const e of combat.enemies.list) if (e.alive) e.root.visible = e.pos.distanceToSquared(camPos) < (e.def.boss ? 160 : 110) ** 2;
   // 忍者跑時視野稍微變廣，速度感更強
   const fov = 60 + (playing && player.sprinting ? 7 : 0);
@@ -418,14 +457,14 @@ function frame() {
   falls.update(dt, camera.position);
   waystations.update(dt, progress.flags.waystations);
   sfx.setAmbience(playing ? ambienceAt(player.pos) : {});
+  sfx.update(realDt, playing ? musicMood(active ? dt : 0) : null);
   if (playing) hud.update(realDt, player, sky, combat);
   input.endFrame();
   post.render();
-  requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
-window.game = { scene, terrain, nature, falls, waystations, player, camCtl, world, renderer, input, hud, post, quality, grass, sharedTime, sky, combat, floatText, effects, progress, menu, quests, dialogue, townNpcs, streets, village, villagers, sfx, ui: { updateInteract, interact, openMenu, openMap, talk, checkWaystations, travelMenu, travelTo } };
+window.game = { tick, scene, terrain, nature, falls, waystations, player, camCtl, world, renderer, input, hud, post, quality, grass, sharedTime, sky, combat, floatText, effects, progress, menu, quests, dialogue, townNpcs, streets, village, villagers, streetLife, sfx, ui: { updateInteract, interact, openMenu, openMap, talk, checkWaystations, travelMenu, travelTo } };
 
 // 關閉或切到背景前存檔
 addEventListener('pagehide', () => progress.save(sky.hour));

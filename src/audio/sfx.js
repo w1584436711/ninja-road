@@ -2,8 +2,12 @@
 // 瀏覽器規定要使用者操作後才能出聲，所以在按下「開始」時呼叫 unlock()。
 import { SOUNDS } from './sounds.js';
 import { Ambience } from './ambience.js';
+import { Music } from './music.js';
 
 const STORAGE_KEY = 'ninja-road.sound';
+const VOLUME_KEY = 'ninja-road.volume';
+// 三個音量（0..1）：背景音樂、音效、環境音
+const DEFAULT_VOLUME = { music: 0.7, sfx: 1, ambience: 1 };
 
 // 各種地面的腳步聲：雜訊經過濾波（決定質感）＋低頻悶響（決定重量）
 const SURFACES = {
@@ -88,7 +92,11 @@ export class Sfx {
   constructor() {
     this.ctx = null;
     this.enabled = true;
-    try { this.enabled = localStorage.getItem(STORAGE_KEY) !== 'off'; } catch { /* 用預設值 */ }
+    this.volume = { ...DEFAULT_VOLUME };
+    try {
+      this.enabled = localStorage.getItem(STORAGE_KEY) !== 'off';
+      Object.assign(this.volume, JSON.parse(localStorage.getItem(VOLUME_KEY) || '{}'));
+    } catch { /* 用預設值 */ }
   }
 
   unlock() {
@@ -101,9 +109,15 @@ export class Sfx {
       const data = buf.getChannelData(0);
       for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
       this.noiseBuf = buf;
+      // 總音量 → 三條音軌：音效（master）、背景音樂、環境音
+      this.main = this.ctx.createGain();
+      this.main.gain.value = this.enabled ? 1 : 0;
+      this.main.connect(this.ctx.destination);
       this.master = this.ctx.createGain();
-      this.master.gain.value = 0.5;
-      this.master.connect(this.ctx.destination);
+      this.musicBus = this.ctx.createGain();
+      this.ambBus = this.ctx.createGain();
+      for (const b of [this.master, this.musicBus, this.ambBus]) b.connect(this.main);
+      this.applyVolume();
       this.out = this.master;
       this.lastPlayed = {};
       const c = this.ctx;
@@ -111,7 +125,8 @@ export class Sfx {
         small: Array.from({ length: 6 }, () => makeSplash(c, false)),
         big: Array.from({ length: 3 }, () => makeSplash(c, true)),
       };
-      this.ambience = new Ambience(c, this.master);
+      this.ambience = new Ambience(c, this.ambBus);
+      this.music = new Music(c, this.musicBus);
     }
     this.ctx.resume?.();
   }
@@ -122,9 +137,33 @@ export class Sfx {
     this.ambience.setLevels(this.enabled ? levels : {});
   }
 
+  // 每一幀呼叫：背景音樂與鳥叫的排程。mood：曲子名稱（music.js 的 TRACKS），null 為不放
+  update(dt, mood) {
+    if (!this.ready) return;
+    this.music.setMood(this.volume.music > 0 ? mood : null);
+    this.music.tick();
+    this.ambience.tick(dt);
+  }
+
+  // 滑桿的值看起來要「線性」，實際音量用平方，小聲時比較好調
+  applyVolume() {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    this.master.gain.setTargetAtTime(0.5 * this.volume.sfx ** 2, now, 0.05);
+    this.musicBus.gain.setTargetAtTime(1.2 * this.volume.music ** 2, now, 0.05);
+    this.ambBus.gain.setTargetAtTime(0.5 * this.volume.ambience ** 2, now, 0.05);
+  }
+
+  setVolume(key, v) {
+    this.volume[key] = Math.max(0, Math.min(1, v));
+    this.applyVolume();
+    try { localStorage.setItem(VOLUME_KEY, JSON.stringify(this.volume)); } catch { /* 忽略 */ }
+  }
+
   toggle() {
     this.enabled = !this.enabled;
     try { localStorage.setItem(STORAGE_KEY, this.enabled ? 'on' : 'off'); } catch { /* 忽略 */ }
+    if (this.main) this.main.gain.setTargetAtTime(this.enabled ? 1 : 0, this.ctx.currentTime, 0.05);
     return this.enabled;
   }
 
